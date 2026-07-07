@@ -1,0 +1,10 @@
+export { default as FEND_LOGO } from "../assets/images/fend-logo.svg";
+export { default as SHOPPING_BAG } from "../assets/images/shopping-basket.svg";
+export { default as BOXES } from "../assets/images/boxes.svg";
+export { default as WAREHOUSE } from "../assets/images/warehouse.svg";
+export { default as AIRPLANE } from "../assets/images/airplane.svg";
+export { default as FRAME } from "../assets/images/frame.png";
+export { default as FEND_IMPORT } from "../assets/images/fend-import.png";
+export { default as CHECK_ROUND } from "../assets/images/check-round.svg";
+export { default as CALL_FRAME } from "../assets/images/call-frame.svg";
+export { default as FEND_FOOTER_LOGO } from "../assets/images/fend-footer.svg";
