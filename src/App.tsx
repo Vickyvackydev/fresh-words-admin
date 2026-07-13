@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useSelector } from "react-redux";
-import { selectToken } from "./state/slices/authReducer";
-import { Toaster } from "react-hot-toast";
+import { useDispatch, useSelector } from "react-redux";
+import { selectToken, setToken } from "./state/slices/authReducer";
+
 import { useState, useEffect } from "react";
 
 // Views
@@ -12,18 +12,21 @@ import NotificationsView from "./ui/NotificationsView";
 import FeedbackView from "./ui/FeedbackView";
 import SettingsView from "./ui/SettingsView";
 import SidebarLayout from "./layout/SidebarLayout";
+import { ToastContainer } from "./components/CustomToast";
 
 function App() {
   const token = useSelector(selectToken);
   const location = useLocation();
-  
+
   // Keep track of which category was clicked in the sidebar to sync to Devotions filter
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<
     "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional" | null
   >(null);
 
   // Sync category selection when coming from sidebar links
-  const handleCategorySelection = (cat: "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional") => {
+  const handleCategorySelection = (
+    cat: "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional",
+  ) => {
     setSelectedCategoryFilter(cat);
   };
 
@@ -38,13 +41,15 @@ function App() {
 
   return (
     <>
-      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-      
+      <ToastContainer />
+
       <Routes>
         {/* Unauthenticated Route */}
-        <Route 
-          path="/login" 
-          element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" replace />} 
+        <Route
+          path="/login"
+          element={
+            !isAuthenticated ? <Login /> : <Navigate to="/dashboard" replace />
+          }
         />
 
         {/* Authenticated Routes wrapped in SidebarLayout */}
@@ -52,7 +57,9 @@ function App() {
           path="/dashboard"
           element={
             isAuthenticated ? (
-              <SidebarLayout setSelectedCategoryFilter={handleCategorySelection}>
+              <SidebarLayout
+                setSelectedCategoryFilter={handleCategorySelection}
+              >
                 <Dashboard />
               </SidebarLayout>
             ) : (
@@ -65,10 +72,12 @@ function App() {
           path="/devotions"
           element={
             isAuthenticated ? (
-              <SidebarLayout setSelectedCategoryFilter={handleCategorySelection}>
-                <Devotions 
-                  categoryFilter={selectedCategoryFilter} 
-                  setCategoryFilter={setSelectedCategoryFilter} 
+              <SidebarLayout
+                setSelectedCategoryFilter={handleCategorySelection}
+              >
+                <Devotions
+                  categoryFilter={selectedCategoryFilter}
+                  setCategoryFilter={setSelectedCategoryFilter}
                 />
               </SidebarLayout>
             ) : (
@@ -81,7 +90,9 @@ function App() {
           path="/notifications"
           element={
             isAuthenticated ? (
-              <SidebarLayout setSelectedCategoryFilter={handleCategorySelection}>
+              <SidebarLayout
+                setSelectedCategoryFilter={handleCategorySelection}
+              >
                 <NotificationsView />
               </SidebarLayout>
             ) : (
@@ -94,7 +105,9 @@ function App() {
           path="/feedback"
           element={
             isAuthenticated ? (
-              <SidebarLayout setSelectedCategoryFilter={handleCategorySelection}>
+              <SidebarLayout
+                setSelectedCategoryFilter={handleCategorySelection}
+              >
                 <FeedbackView />
               </SidebarLayout>
             ) : (
@@ -107,7 +120,9 @@ function App() {
           path="/settings"
           element={
             isAuthenticated ? (
-              <SidebarLayout setSelectedCategoryFilter={handleCategorySelection}>
+              <SidebarLayout
+                setSelectedCategoryFilter={handleCategorySelection}
+              >
                 <SettingsView />
               </SidebarLayout>
             ) : (
@@ -117,9 +132,11 @@ function App() {
         />
 
         {/* Fallbacks */}
-        <Route 
-          path="*" 
-          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
+        <Route
+          path="*"
+          element={
+            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+          }
         />
       </Routes>
     </>

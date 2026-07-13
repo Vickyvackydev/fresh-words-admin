@@ -18,6 +18,7 @@ const persistConfig = {
   key: "root",
   version: 1,
   storage,
+  whitelist: ["auths", "globalstate"],
 };
 
 const appReducer = combineReducers({
@@ -33,7 +34,8 @@ const appReducer = combineReducers({
 const persistedAuthReducer = persistReducer(persistConfig, appReducer);
 const rootReducer: Reducer = (state, action) => {
   if (action.type === "auths/reset") {
-    state = undefined; // Reset state without calling persistor.purge()
+    state = undefined;
+    localStorage.removeItem("persist:root");
   }
   return persistedAuthReducer(state, action);
 };

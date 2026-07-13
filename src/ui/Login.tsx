@@ -3,21 +3,22 @@ import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { Lock, Mail, Eye, EyeOff, Loader2 } from "lucide-react";
 import { setToken, setUser, setRole } from "../state/slices/authReducer";
-import toast from "react-hot-toast";
+import toast from "../components/CustomToast";
+import { useLogin } from "../api/hooks";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const loginMutation = useLogin();
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       toast.error("Please fill in all fields");
       return;
@@ -25,41 +26,45 @@ export default function Login() {
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      
-      if (email.includes("@") && password.length >= 6) {
-        const mockUser = {
-          id: "admin-1",
-          first_name: "John",
-          last_name: "Doe",
-          email: email
-        };
-        const mockToken = "mock-jwt-token-xyz-123";
-        
-        dispatch(setUser(mockUser));
-        dispatch(setToken(mockToken));
-        dispatch(setRole("ADMIN"));
-        
-        toast.success("Welcome back, Pastor John!");
-        navigate("/dashboard");
-      } else {
-        toast.error("Invalid credentials (password must be at least 6 characters)");
-      }
-    }, 1000);
+    loginMutation.mutate(
+      { email, password },
+      {
+        onSuccess: (data) => {
+          setIsLoading(false);
+          const userProfile = {
+            id: "admin-1",
+            first_name: "Super",
+            last_name: "Admin",
+            email: data.email,
+          };
+          dispatch(setUser(userProfile));
+          dispatch(setToken(data.token));
+          dispatch(setRole("ADMIN"));
+
+          toast.success("Welcome back, Admin!");
+          navigate("/dashboard");
+        },
+        onError: (err: any) => {
+          setIsLoading(false);
+          toast.error(
+            err.response?.data?.message || err.message || "Invalid credentials",
+          );
+        },
+      },
+    );
   };
 
   return (
     <div className="min-h-screen w-screen flex items-center justify-center bg-[#0B0F19] p-4 relative font-sans select-none">
       <div className="w-full max-w-sm bg-[#121214] border border-[#232326] rounded-md shadow-2xl p-6 relative z-10">
-        
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-6">
           <div className="w-10 h-10 rounded-sm bg-[#27272A] border border-[#3F3F46] flex items-center justify-center font-bold text-white text-xl mb-2">
             FW
           </div>
-          <h2 className="text-lg font-bold text-white tracking-wide">Fresh Words Admin</h2>
-          <p className="text-xxs text-slate-500 font-mono tracking-wider uppercase mt-0.5">Console authentication</p>
+          <h2 className="text-lg font-bold text-white tracking-wide">
+            Fresh Devotionals Admin
+          </h2>
         </div>
 
         {/* Login Form */}
@@ -106,25 +111,15 @@ export default function Login() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-500 hover:text-slate-350 cursor-pointer"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
 
-          {/* Remember Me */}
-          <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-2 cursor-pointer text-slate-500 hover:text-slate-400 select-none">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 bg-[#161619] border-[#232326] rounded-sm text-orange-600 focus:ring-orange-500 focus:ring-offset-slate-900 border"
-              />
-              <span className="text-xxs font-bold uppercase tracking-wider">Remember Me</span>
-            </label>
-          </div>
-
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={isLoading}
@@ -133,7 +128,7 @@ export default function Login() {
             {isLoading ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Validating...</span>
+                <span>Please wait...</span>
               </>
             ) : (
               <span>Sign In</span>
@@ -141,13 +136,13 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Demo Notice */}
-        <div className="mt-5 pt-4 border-t border-[#232326] text-center">
+        {/* <div className="mt-5 pt-4 border-t border-[#232326] text-center">
           <p className="text-[10px] font-mono text-slate-500 leading-normal">
-            Demo credentials: <span className="text-slate-400">pastor.john@freshwords.org</span> / <span className="text-slate-400">password</span>
+            Demo credentials:{" "}
+            <span className="text-slate-400">pastor.john@freshwords.org</span> /{" "}
+            <span className="text-slate-400">password</span>
           </p>
-        </div>
-
+        </div> */}
       </div>
     </div>
   );

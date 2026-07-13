@@ -1,19 +1,29 @@
-import React, { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { selectSettings, updateSettings } from "../state/slices/settingsSlice";
+import React, { useState, useEffect } from "react";
 import { Save, UploadCloud, Info, Globe, Mail } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "../components/CustomToast";
+import { useAdminSettings, useUpdateAdminSettings } from "../api/hooks";
 
 export default function SettingsView() {
-  const dispatch = useDispatch();
-  const currentSettings = useSelector(selectSettings);
+  const { data: settings, isLoading: _isLoading } = useAdminSettings();
+  const updateSettingsMutation = useUpdateAdminSettings();
 
-  const [churchName, setChurchName] = useState(currentSettings.churchName);
-  const [supportEmail, setSupportEmail] = useState(currentSettings.supportEmail);
-  const [privacyPolicy, setPrivacyPolicy] = useState(currentSettings.privacyPolicy);
-  const [termsOfService, setTermsOfService] = useState(currentSettings.termsOfService);
-  const [aboutUs, setAboutUs] = useState(currentSettings.aboutUs);
-  const [logoPreview, setLogoPreview] = useState<string>(currentSettings.appLogo);
+  const [churchName, setChurchName] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [privacyPolicy, setPrivacyPolicy] = useState("");
+  const [termsOfService, setTermsOfService] = useState("");
+  const [aboutUs, setAboutUs] = useState("");
+  const [logoPreview, setLogoPreview] = useState<string>("");
+
+  useEffect(() => {
+    if (settings) {
+      setChurchName(settings.church_name || "");
+      setSupportEmail(settings.support_email || "");
+      setPrivacyPolicy(settings.privacy_policy_url || "");
+      setTermsOfService(settings.terms_of_service_url || "");
+      setAboutUs(settings.about_us || "");
+      setLogoPreview(settings.app_logo_url || "");
+    }
+  }, [settings]);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -42,17 +52,26 @@ export default function SettingsView() {
       return;
     }
 
-    dispatch(
-      updateSettings({
-        churchName,
-        supportEmail,
-        privacyPolicy,
-        termsOfService,
-        aboutUs,
-        appLogo: logoPreview
-      })
+    updateSettingsMutation.mutate(
+      {
+        church_name: churchName,
+        support_email: supportEmail,
+        privacy_policy_url: privacyPolicy,
+        terms_of_service_url: termsOfService,
+        about_us: aboutUs,
+        app_logo_url: logoPreview,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Settings saved successfully!");
+        },
+        onError: (err: any) => {
+          toast.error(
+            "Failed to save settings: " + (err.message || "Unknown error"),
+          );
+        },
+      },
     );
-    toast.success("Settings saved successfully!");
   };
 
   return (

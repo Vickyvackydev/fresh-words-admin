@@ -1,60 +1,90 @@
 import { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { 
-  selectFeedback, 
-  markAsRead, 
-  deleteFeedback,
-  FeedbackEntry 
-} from "../state/slices/feedbackSlice";
 import { MessageSquare, Mail, Calendar, Check, Trash2, X } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "../components/CustomToast";
+import {
+  useFeedbackList,
+  useMarkFeedbackRead,
+  useDeleteFeedback,
+} from "../api/hooks";
+import { Feedback } from "../api/services";
+import moment from "moment";
 
 export default function FeedbackView() {
-  const dispatch = useDispatch();
-  const feedbackList = useSelector(selectFeedback);
+  const [page, _setPage] = useState(1);
+  const { data: feedbackPaginated, isLoading: _isLoading } = useFeedbackList(
+    page,
+    10,
+  );
+  const markReadMutation = useMarkFeedbackRead();
+  const deleteMutation = useDeleteFeedback();
 
   // Modal active entry
-  const [selectedEntry, setSelectedEntry] = useState<FeedbackEntry | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<Feedback | null>(null);
+
+  const feedbackList = feedbackPaginated?.data.items ?? [];
 
   const handleMarkAsRead = (id: string) => {
-    dispatch(markAsRead({ id }));
-    toast.success("Feedback marked as read");
-    // Update the selected entry modal view too
-    if (selectedEntry && selectedEntry.id === id) {
-      setSelectedEntry({
-        ...selectedEntry,
-        status: "Read"
-      });
-    }
+    markReadMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success("Feedback marked as read");
+        // Update the selected entry modal view too
+        if (selectedEntry && selectedEntry.id === id) {
+          setSelectedEntry({
+            ...selectedEntry,
+            is_read: true,
+          });
+        }
+      },
+      onError: (err: any) => {
+        toast.error(
+          "Failed to mark as read: " + (err.message || "Unknown error"),
+        );
+      },
+    });
   };
 
   const handleDelete = (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete feedback from ${name}?`)) {
-      dispatch(deleteFeedback({ id }));
-      toast.success("Feedback deleted");
-      setSelectedEntry(null);
+      deleteMutation.mutate(id, {
+        onSuccess: () => {
+          toast.success("Feedback deleted");
+          setSelectedEntry(null);
+        },
+        onError: (err: any) => {
+          toast.error(
+            "Failed to delete feedback: " + (err.message || "Unknown error"),
+          );
+        },
+      });
     }
   };
 
   return (
     <div className="space-y-6 font-sans">
-      
       {/* Heading */}
       <div className="flex flex-col gap-1 border-b border-slate-200 pb-5 w-full">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Congregation Feedback</h1>
-        <p className="text-xs text-slate-500">Read inquiries, review app testimonials, and handle notifications troubleshooting logs</p>
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+          Congregation Feedback
+        </h1>
+        <p className="text-xs text-slate-500">
+          Read inquiries, review app testimonials, and handle notifications
+          troubleshooting logs
+        </p>
       </div>
 
       {/* Feedback Table */}
-      {feedbackList.length === 0 ? (
+      {feedbackList?.length === 0 ? (
         <div className="bg-white rounded-xl p-16 text-center space-y-4 shadow-xs">
           <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto">
             <MessageSquare className="w-8 h-8" />
           </div>
           <div className="space-y-1">
-            <h3 className="font-bold text-slate-700 text-lg">No Feedback Available</h3>
+            <h3 className="font-bold text-slate-700 text-lg">
+              No Feedback Available
+            </h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              You've cleared all feedback inquiries. Excellent job maintaining contact channels!
+              You've cleared all feedback inquiries. Excellent job maintaining
+              contact channels!
             </p>
           </div>
         </div>
@@ -72,12 +102,12 @@ export default function FeedbackView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 text-xs text-slate-700">
-                {feedbackList.map((entry: FeedbackEntry) => {
-                  const isUnread = entry.status === "Unread";
+                {feedbackList?.map((entry: Feedback) => {
+                  const isUnread = !entry.is_read;
 
                   return (
-                    <tr 
-                      key={entry.id} 
+                    <tr
+                      key={entry.id}
                       onClick={() => setSelectedEntry(entry)}
                       className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${
                         isUnread ? "bg-orange-50/20 font-bold" : ""
@@ -86,22 +116,38 @@ export default function FeedbackView() {
                       {/* Sender */}
                       <td className="px-6 py-4 max-w-[200px] truncate">
                         <div className="flex flex-col gap-0.5">
-                          <span className={isUnread ? "text-slate-900 font-extrabold text-sm" : "text-slate-800 font-bold"}>
+                          <span
+                            className={
+                              isUnread
+                                ? "text-slate-900 font-extrabold text-sm"
+                                : "text-slate-800 font-bold"
+                            }
+                          >
                             {entry.name}
                           </span>
-                          <span className="text-[10px] text-slate-450 font-mono truncate">{entry.email}</span>
+                          <span className="text-[10px] text-slate-450 font-mono truncate">
+                            {entry.email}
+                          </span>
                         </div>
                       </td>
 
                       {/* Message preview */}
                       <td className="px-6 py-4 max-w-[320px] truncate">
-                        <span className={isUnread ? "text-slate-800 font-semibold" : "text-slate-500 font-medium"}>
+                        <span
+                          className={
+                            isUnread
+                              ? "text-slate-800 font-semibold"
+                              : "text-slate-500 font-medium"
+                          }
+                        >
                           {entry.message}
                         </span>
                       </td>
 
                       {/* Date */}
-                      <td className="px-6 py-4 text-slate-400 font-mono whitespace-nowrap">{entry.date}</td>
+                      <td className="px-6 py-4 text-slate-400 font-mono whitespace-nowrap">
+                        {moment(entry.created_at).format("MMM DD, YYYY")}
+                      </td>
 
                       {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -118,7 +164,10 @@ export default function FeedbackView() {
                       </td>
 
                       {/* Actions */}
-                      <td className="px-6 py-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <td
+                        className="px-6 py-4 text-right whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex gap-2 justify-end">
                           {isUnread && (
                             <button
@@ -153,12 +202,13 @@ export default function FeedbackView() {
       {selectedEntry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <div className="bg-white border border-slate-100 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden font-sans flex flex-col">
-            
             {/* Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-orange-500" />
-                <span className="font-extrabold text-sm uppercase tracking-wider text-slate-300">Message Detail</span>
+                <span className="font-extrabold text-sm uppercase tracking-wider text-slate-300">
+                  Message Detail
+                </span>
               </div>
               <button
                 onClick={() => setSelectedEntry(null)}
@@ -174,23 +224,29 @@ export default function FeedbackView() {
               <div className="bg-slate-50 border border-slate-150 p-4 rounded-md space-y-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-extrabold text-slate-800 text-base">{selectedEntry.name}</h3>
+                    <h3 className="font-extrabold text-slate-800 text-base">
+                      {selectedEntry.name}
+                    </h3>
                     <span className="text-xs text-slate-500 font-mono inline-flex items-center gap-1 mt-0.5">
                       <Mail className="w-3.5 h-3.5" />
                       <span>{selectedEntry.email}</span>
                     </span>
                   </div>
-                  
+
                   <span className="text-[10px] text-slate-500 font-mono inline-flex items-center gap-1 bg-slate-200/50 px-2 py-0.5 rounded-sm">
                     <Calendar className="w-3 h-3" />
-                    <span>{selectedEntry.date}</span>
+                    <span>
+                      {moment(selectedEntry.created_at).format("MMM DD, YYYY")}
+                    </span>
                   </span>
                 </div>
               </div>
 
               {/* Message text */}
               <div className="space-y-1">
-                <h4 className="text-xxs font-bold text-slate-400 uppercase tracking-widest block">Message Body</h4>
+                <h4 className="text-xxs font-bold text-slate-400 uppercase tracking-widest block">
+                  Message Body
+                </h4>
                 <p className="text-slate-650 bg-slate-50/50 border border-slate-100 rounded-xl p-4 min-h-[100px] text-justify whitespace-pre-wrap">
                   {selectedEntry.message}
                 </p>
@@ -201,7 +257,9 @@ export default function FeedbackView() {
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
               <div>
                 <button
-                  onClick={() => handleDelete(selectedEntry.id, selectedEntry.name)}
+                  onClick={() =>
+                    handleDelete(selectedEntry.id, selectedEntry.name)
+                  }
                   className="inline-flex items-center gap-1.5 text-xs text-red-600 hover:text-red-750 font-bold px-3 py-2 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -210,7 +268,7 @@ export default function FeedbackView() {
               </div>
 
               <div className="flex gap-2">
-                {selectedEntry.status === "Unread" && (
+                {!selectedEntry.is_read && (
                   <button
                     onClick={() => handleMarkAsRead(selectedEntry.id)}
                     className="inline-flex items-center gap-1.5 text-xs bg-orange-600 hover:bg-orange-500 text-white font-bold px-4 py-2 rounded-lg transition-colors shadow-md shadow-orange-600/10 cursor-pointer"
@@ -227,11 +285,9 @@ export default function FeedbackView() {
                 </button>
               </div>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

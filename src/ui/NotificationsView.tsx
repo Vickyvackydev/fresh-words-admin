@@ -1,26 +1,152 @@
-import { useDispatch, useSelector } from "react-redux";
-import { selectNotifications, updateNotificationSetting, NotificationSetting } from "../state/slices/notificationSlice";
-import { Bell, Clock, Shuffle, CheckCircle } from "lucide-react";
-import toast from "react-hot-toast";
+import React from "react";
+import { Bell, Clock, Shuffle, CheckCircle, Loader2 } from "lucide-react";
+import toast from "../components/CustomToast";
+import { useAdminSettings, useUpdateAdminSettings } from "../api/hooks";
+
+interface TimeSelectProps {
+  value: string;
+  onChange: (time: string) => void;
+  disabled: boolean;
+}
+
+const TimeSelect = ({ value, onChange, disabled }: TimeSelectProps) => {
+  // Parse value (e.g. "08:30 AM")
+  const parts = value.match(/^(\d{2}):(\d{2})\s*(AM|PM)$/i) || ["08:00 AM", "08", "00", "AM"];
+  const hour = parts[1];
+  const minute = parts[2];
+  const ampm = parts[3].toUpperCase();
+
+  const handleHourChange = (newHour: string) => {
+    onChange(`${newHour}:${minute} ${ampm}`);
+  };
+  const handleMinuteChange = (newMin: string) => {
+    onChange(`${hour}:${newMin} ${ampm}`);
+  };
+  const handleAmpmChange = (newAmpm: string) => {
+    onChange(`${hour}:${minute} ${newAmpm}`);
+  };
+
+  const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
+  const minutes = ["00", "15", "30", "45"]; // Common devotional time step divisions
+
+  return (
+    <div className="flex items-center gap-1.5 justify-end">
+      <select
+        value={hour}
+        disabled={disabled}
+        onChange={(e) => handleHourChange(e.target.value)}
+        className="bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 text-xs text-center text-slate-750 font-bold focus:outline-none focus:border-orange-500 disabled:opacity-50 cursor-pointer font-mono"
+      >
+        {hours.map((h) => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <span className="text-slate-400 font-bold text-xs">:</span>
+      <select
+        value={minute}
+        disabled={disabled}
+        onChange={(e) => handleMinuteChange(e.target.value)}
+        className="bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 text-xs text-center text-slate-750 font-bold focus:outline-none focus:border-orange-500 disabled:opacity-50 cursor-pointer font-mono"
+      >
+        {minutes.map((m) => <option key={m} value={m}>{m}</option>)}
+      </select>
+      <select
+        value={ampm}
+        disabled={disabled}
+        onChange={(e) => handleAmpmChange(e.target.value)}
+        className="bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 text-xs text-center text-slate-750 font-bold focus:outline-none focus:border-orange-500 disabled:opacity-50 cursor-pointer font-mono"
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
+  );
+};
 
 export default function NotificationsView() {
-  const dispatch = useDispatch();
-  const settings = useSelector(selectNotifications);
+  const { data: settingsData, isLoading, refetch } = useAdminSettings();
+  const updateSettingsMutation = useUpdateAdminSettings();
+
+  const settingsList = settingsData ? [
+    {
+      id: "daily_deliverance",
+      category: "Daily Deliverance",
+      enabled: settingsData.daily_deliverance_enabled,
+      time: settingsData.daily_deliverance_time,
+      randomize: settingsData.daily_deliverance_randomize,
+    },
+    {
+      id: "holiness",
+      category: "Holiness",
+      enabled: settingsData.holiness_enabled,
+      time: settingsData.holiness_time,
+      randomize: settingsData.holiness_randomize,
+    },
+    {
+      id: "prayer",
+      category: "Prayer",
+      enabled: settingsData.prayer_enabled,
+      time: settingsData.prayer_time,
+      randomize: settingsData.prayer_randomize,
+    },
+    {
+      id: "yearly_devotional",
+      category: "Yearly Devotional",
+      enabled: settingsData.yearly_devotional_enabled,
+      time: settingsData.yearly_devotional_time,
+      randomize: settingsData.yearly_devotional_randomize,
+    }
+  ] : [];
 
   const handleToggleEnabled = (id: string, enabled: boolean, category: string) => {
-    dispatch(updateNotificationSetting({ id, enabled }));
-    toast.success(`${category} notifications ${enabled ? "enabled" : "disabled"}`);
+    updateSettingsMutation.mutate({
+      ...settingsData,
+      [`${id}_enabled`]: enabled
+    }, {
+      onSuccess: () => {
+        refetch();
+        toast.success(`${category} notifications ${enabled ? "enabled" : "disabled"}`);
+      },
+      onError: (err: any) => {
+        toast.error("Failed to update status: " + (err.message || "Unknown error"));
+      }
+    });
   };
 
   const handleTimeChange = (id: string, time: string) => {
-    dispatch(updateNotificationSetting({ id, time }));
-    // No toast here to prevent spamming while user is editing
+    updateSettingsMutation.mutate({
+      ...settingsData,
+      [`${id}_time`]: time
+    }, {
+      onSuccess: () => {
+        refetch();
+      },
+      onError: (err: any) => {
+        toast.error("Failed to update time: " + (err.message || "Unknown error"));
+      }
+    });
   };
 
   const handleToggleRandomize = (id: string, randomize: boolean, category: string) => {
-    dispatch(updateNotificationSetting({ id, randomize }));
-    toast.success(`${category} year randomization ${randomize ? "enabled" : "disabled"}`);
+    updateSettingsMutation.mutate({
+      ...settingsData,
+      [`${id}_randomize`]: randomize
+    }, {
+      onSuccess: () => {
+        refetch();
+        toast.success(`${category} year randomization ${randomize ? "enabled" : "disabled"}`);
+      },
+      onError: (err: any) => {
+        toast.error("Failed to update randomization: " + (err.message || "Unknown error"));
+      }
+    });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 font-sans">
@@ -33,7 +159,7 @@ export default function NotificationsView() {
 
       {/* Settings Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {settings.map((setting: NotificationSetting) => {
+        {settingsList.map((setting) => {
           const isYearly = setting.category === "Yearly Devotional";
 
           return (
@@ -74,14 +200,11 @@ export default function NotificationsView() {
                   </div>
                   
                   <div>
-                    {/* Time Input / Picker */}
-                    <input
-                      type="text"
+                    {/* Time Dropdowns Selectors */}
+                    <TimeSelect
                       value={setting.time}
                       disabled={!setting.enabled}
-                      onChange={(e) => handleTimeChange(setting.id, e.target.value)}
-                      placeholder="e.g. 08:00 AM"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 text-xs text-center text-slate-750 font-bold font-mono focus:outline-none focus:border-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onChange={(time) => handleTimeChange(setting.id, time)}
                     />
                   </div>
                 </div>

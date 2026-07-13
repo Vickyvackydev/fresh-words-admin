@@ -12,26 +12,33 @@ import {
   ChevronRight,
   Menu,
   X,
-  User
+  User,
 } from "lucide-react";
 import { reset, selectUser } from "../state/slices/authReducer";
 import { selectUnreadCount } from "../state/slices/feedbackSlice";
+import { useAdminSettings } from "../api/hooks";
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
-  setSelectedCategoryFilter?: (category: "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional") => void;
+  setSelectedCategoryFilter?: (
+    category: "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional",
+  ) => void;
 }
 
-export default function SidebarLayout({ children, setSelectedCategoryFilter }: SidebarLayoutProps) {
+export default function SidebarLayout({
+  children,
+  setSelectedCategoryFilter,
+}: SidebarLayoutProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDevotionsOpen, setIsDevotionsOpen] = useState(true);
-  
+
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  
+
   const user = useSelector(selectUser);
   const unreadFeedbackCount = useSelector(selectUnreadCount);
+  const { data: settings } = useAdminSettings();
 
   const handleLogout = () => {
     dispatch(reset());
@@ -42,10 +49,16 @@ export default function SidebarLayout({ children, setSelectedCategoryFilter }: S
     { name: "Daily Deliverance", value: "Daily Deliverance" as const },
     { name: "Holiness", value: "Holiness" as const },
     { name: "Prayer", value: "Prayer" as const },
-    { name: "Yearly Devotional", value: "Yearly Devotional" as const }
+    { name: "Yearly Devotional", value: "Yearly Devotional" as const },
   ];
 
-  const handleCategoryClick = (categoryVal: "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional") => {
+  const handleCategoryClick = (
+    categoryVal:
+      | "Daily Deliverance"
+      | "Holiness"
+      | "Prayer"
+      | "Yearly Devotional",
+  ) => {
     if (setSelectedCategoryFilter) {
       setSelectedCategoryFilter(categoryVal);
     } else {
@@ -61,42 +74,51 @@ export default function SidebarLayout({ children, setSelectedCategoryFilter }: S
     {
       name: "Dashboard",
       path: "/dashboard",
-      icon: LayoutDashboard
+      icon: LayoutDashboard,
     },
     {
       name: "Devotions",
       path: "/devotions",
       icon: BookOpen,
-      isExpandable: true
+      isExpandable: true,
     },
     {
       name: "Notifications",
       path: "/notifications",
-      icon: Bell
+      icon: Bell,
     },
     {
       name: "Feedback",
       path: "/feedback",
       icon: MessageSquare,
-      badge: unreadFeedbackCount > 0 ? unreadFeedbackCount : undefined
+      badge: unreadFeedbackCount > 0 ? unreadFeedbackCount : undefined,
     },
     {
       name: "Settings",
       path: "/settings",
-      icon: Settings
-    }
+      icon: Settings,
+    },
   ];
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#121214] text-slate-400 font-sans border-r border-[#232326]">
       {/* Brand Header */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-[#232326] bg-[#161619]">
-        <div className="w-8 h-8 rounded-sm bg-[#27272A] border border-[#3F3F46] flex items-center justify-center font-bold text-white text-md tracking-wider">
-          FW
+        <div className="w-8 h-8 rounded-sm bg-[#27272A] border border-[#3F3F46] flex items-center justify-center font-bold text-white text-md tracking-wider overflow-hidden">
+          {settings?.app_logo_url ? (
+            <img
+              src={settings.app_logo_url}
+              alt="App Logo"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            "FD"
+          )}
         </div>
         <div className="flex flex-col text-left">
-          <span className="text-[#FAFAFA] font-bold text-sm tracking-wide leading-tight">Fresh Words</span>
-          <span className="text-[10px] text-slate-500 font-mono tracking-wider uppercase">Console v1.0.0</span>
+          <span className="text-[#FAFAFA] font-bold text-sm tracking-wide leading-tight">
+            {settings?.church_name || "Fresh Devotionals"}
+          </span>
         </div>
       </div>
 
@@ -110,33 +132,41 @@ export default function SidebarLayout({ children, setSelectedCategoryFilter }: S
             return (
               <div key={item.name} className="space-y-0.5">
                 <button
-                  onClick={() => setIsDevotionsOpen(!isDevotionsOpen)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-semibold tracking-wide transition-all group ${
-                    active 
-                      ? "bg-[#1E1E22] text-white border-l-2 border-orange-500 rounded-l-none pl-2.5" 
+                  onClick={() => {
+                    setIsDevotionsOpen(!isDevotionsOpen);
+                    navigate("/devotions");
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-semibold tracking-wide transition-all group ${
+                    active
+                      ? "bg-[#1E1E22] text-white border-l-2 border-orange-500 rounded-l-none pl-2.5"
                       : "hover:bg-[#1A1A1E] hover:text-white"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Icon className={`w-3.5 h-3.5 ${active ? "text-orange-500" : "text-slate-500 group-hover:text-slate-350"}`} />
+                    <Icon
+                      className={`w-4 h-4 ${active ? "text-orange-500" : "text-slate-500 group-hover:text-slate-350"}`}
+                    />
                     <span>{item.name}</span>
                   </div>
                   {isDevotionsOpen ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
+                    <ChevronDown className="w-4 h-4 text-slate-600" />
                   ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                    <ChevronRight className="w-4 h-4 text-slate-600" />
                   )}
                 </button>
 
                 {isDevotionsOpen && (
                   <div className="pl-6 space-y-0.5 border-l border-[#232326] ml-4.5 my-0.5">
                     {categories.map((cat) => {
-                      const isCurrentCat = active && sessionStorage.getItem("selectedCategoryFilter") === cat.value;
+                      const isCurrentCat =
+                        active &&
+                        sessionStorage.getItem("selectedCategoryFilter") ===
+                          cat.value;
                       return (
                         <button
                           key={cat.name}
                           onClick={() => handleCategoryClick(cat.value)}
-                          className={`w-full text-left block px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                          className={`w-full text-left block px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
                             isCurrentCat
                               ? "text-orange-500 bg-[#1E1E22]/40"
                               : "text-slate-500 hover:text-slate-300 hover:bg-[#1A1A1E]/30"
@@ -157,18 +187,20 @@ export default function SidebarLayout({ children, setSelectedCategoryFilter }: S
               key={item.name}
               to={item.path}
               onClick={() => setIsMobileOpen(false)}
-              className={`flex items-center justify-between px-3 py-2 rounded-md text-xs font-semibold tracking-wide transition-all group ${
-                active 
-                  ? "bg-[#1E1E22] text-white border-l-2 border-orange-500 rounded-l-none pl-2.5" 
+              className={`flex items-center justify-between px-3 py-2 rounded-md text-sm font-semibold tracking-wide transition-all group ${
+                active
+                  ? "bg-[#1E1E22] text-white border-l-2 border-orange-500 rounded-l-none pl-2.5"
                   : "hover:bg-[#1A1A1E] hover:text-white"
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Icon className={`w-3.5 h-3.5 ${active ? "text-orange-500" : "text-slate-500 group-hover:text-slate-350"}`} />
+                <Icon
+                  className={`w-4 h-4 ${active ? "text-orange-500" : "text-slate-500 group-hover:text-slate-355"}`}
+                />
                 <span>{item.name}</span>
               </div>
               {item.badge !== undefined && (
-                <span className="bg-[#27272A] border border-[#3F3F46] text-slate-300 text-[10px] font-mono px-2 py-0.5 rounded-xs scale-90">
+                <span className="bg-[#27272A] border border-[#3F3F46] text-slate-300 text-xs font-mono px-2 py-0.5 rounded-xs scale-90">
                   {item.badge}
                 </span>
               )}
@@ -185,8 +217,12 @@ export default function SidebarLayout({ children, setSelectedCategoryFilter }: S
               <User className="w-3.5 h-3.5" />
             </div>
             <div className="flex flex-col text-left overflow-hidden">
-              <span className="text-[11px] font-bold text-[#FAFAFA] truncate">Pastor John</span>
-              <span className="text-[9px] font-mono text-slate-550 truncate">{user?.email || "admin@freshwords.org"}</span>
+              <span className="text-[11px] font-bold text-[#FAFAFA] truncate">
+                {user?.first_name} {user?.last_name}
+              </span>
+              <span className="text-[9px] font-mono text-slate-550 truncate">
+                {user?.email}
+              </span>
             </div>
           </div>
           <button
@@ -220,11 +256,12 @@ export default function SidebarLayout({ children, setSelectedCategoryFilter }: S
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="h-full flex flex-col">
-              {sidebarContent}
-            </div>
+            <div className="h-full flex flex-col">{sidebarContent}</div>
           </div>
-          <div className="flex-shrink-0 w-14" onClick={() => setIsMobileOpen(false)}></div>
+          <div
+            className="flex-shrink-0 w-14"
+            onClick={() => setIsMobileOpen(false)}
+          ></div>
         </div>
       )}
 
@@ -239,7 +276,9 @@ export default function SidebarLayout({ children, setSelectedCategoryFilter }: S
             >
               <Menu className="w-5 h-5" />
             </button>
-            <span className="font-bold text-xs tracking-wider font-mono">FW ADMIN</span>
+            <span className="font-bold text-xs tracking-wider font-mono">
+              FW ADMIN
+            </span>
           </div>
           <div className="w-7 h-7 rounded-sm bg-[#27272A] border border-[#3F3F46] flex items-center justify-center font-bold text-xxs">
             PJ
@@ -248,9 +287,7 @@ export default function SidebarLayout({ children, setSelectedCategoryFilter }: S
 
         {/* Dynamic content viewport */}
         <main className="flex-1 relative overflow-y-auto focus:outline-none bg-[#FAFAFC] p-4 md:p-8 scrollbar-thin">
-          <div className="max-w-7xl mx-auto space-y-6">
-            {children}
-          </div>
+          <div className="max-w-7xl mx-auto space-y-6">{children}</div>
         </main>
       </div>
     </div>

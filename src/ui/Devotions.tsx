@@ -1,14 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { 
-  selectPackages, 
-  publishPackage, 
-  rollbackPackage, 
-  deletePackage,
-  generate365Days,
-  DevotionalEntry,
-  DevotionalPackage 
-} from "../state/slices/devotionalSlice";
 import { 
   Search, 
   UploadCloud, 
@@ -24,7 +14,10 @@ import {
   BookOpen,
   Sparkles
 } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "../components/CustomToast";
+import { usePackageHistory, useUploadPackage, usePublishPackage, useRollbackPackage } from "../api/hooks";
+import { Package, Devotional as APIDevotional } from "../api/services";
+import moment from "moment";
 
 interface DevotionsProps {
   categoryFilter?: "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional" | null;
@@ -32,8 +25,9 @@ interface DevotionsProps {
 }
 
 export default function Devotions({ categoryFilter, setCategoryFilter }: DevotionsProps) {
-  const dispatch = useDispatch();
-  const allPackages = useSelector(selectPackages);
+  const uploadPackageMutation = useUploadPackage();
+  const publishPackageMutation = usePublishPackage();
+  const rollbackPackageMutation = useRollbackPackage();
 
   // Tabs: 'browse' | 'upload' | 'history'
   const [activeTab, setActiveTab] = useState<"browse" | "upload" | "history">("browse");
@@ -41,8 +35,16 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   // Filter States
   const [selectedCategory, setSelectedCategory] = useState<
     "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional"
-  >("Daily Deliverance");
-  const [selectedYear, setSelectedYear] = useState<number>(2027);
+  >(() => {
+    const cached = sessionStorage.getItem("selectedCategoryFilter");
+    if (cached) {
+      sessionStorage.removeItem("selectedCategoryFilter");
+      return cached as any;
+    }
+    return "Daily Deliverance";
+  });
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -56,7 +58,7 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   }, [categoryFilter, setCategoryFilter]);
 
   // Preview Modal States
-  const [previewDevotional, setPreviewDevotional] = useState<DevotionalEntry | null>(null);
+  const [previewDevotional, setPreviewDevotional] = useState<APIDevotional | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -66,70 +68,43 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   const [uploadCategory, setUploadCategory] = useState<
     "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional"
   >("Daily Deliverance");
-  const [uploadYear, setUploadYear] = useState<number>(2028);
+  const [uploadYear, setUploadYear] = useState<number>(currentYear + 1);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [simulateError, setSimulateError] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStep, setProcessingStep] = useState(0);
-  const [processingProgress, setProcessingProgress] = useState(0);
   const [showValidationReport, setShowValidationReport] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [uploadReport, setUploadReport] = useState<any>(null);
 
-  // Processing steps text
-  const uploadSteps = [
-    { title: "Uploading File...", barChar: "█████████" },
-    { title: "Reading PDF...", barChar: "██████" },
-    { title: "Extracting Days & Scripts...", barChar: "███████" },
-    { title: "Validating Dates & Scripture Ref...", barChar: "█████████" },
-    { title: "Saving Draft Package...", barChar: "███████" }
-  ];
-
-  // Simulated processing timer
+  // Sync upload category selector with selected category when selected category changes
   useEffect(() => {
-    let timer: any;
-    if (isProcessing) {
-      timer = setInterval(() => {
-        setProcessingProgress((prev) => {
-          if (prev >= 100) {
-            if (processingStep < uploadSteps.length - 1) {
-              setProcessingStep((s) => s + 1);
-              return 0;
-            } else {
-              // Complete processing
-              setIsProcessing(false);
-              setShowValidationReport(true);
-              clearInterval(timer);
-              return 100;
-            }
-          }
-          return prev + 10;
-        });
-      }, 80);
-    }
-    return () => clearInterval(timer);
-  }, [isProcessing, processingStep]);
+    setUploadCategory(selectedCategory);
+  }, [selectedCategory]);
 
-  // Get active/filtered packages
-  const filteredPackages = allPackages.filter((pkg: DevotionalPackage) => {
+  // Query packages history from backend (automatically refetches when category changes)
+  const { data: packages = [], refetch: refetchHistory } = usePackageHistory(selectedCategory);
+
+  const filteredPackages = packages.filter((pkg: Package) => {
     if (pkg.category !== selectedCategory) return false;
     if (selectedYear && pkg.year !== selectedYear) return false;
-    if (selectedStatus !== "All" && pkg.status !== selectedStatus) return false;
+    if (selectedStatus !== "All" && pkg.status.toLowerCase() !== selectedStatus.toLowerCase()) return false;
     return true;
   });
 
   // Get devotion entries from filtered packages
-  const allFilteredEntries: { entry: DevotionalEntry; pkg: DevotionalPackage }[] = [];
-  filteredPackages.forEach((pkg: DevotionalPackage) => {
-    pkg.entries.forEach((entry: DevotionalEntry) => {
-      const matchSearch =
-        entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.scriptureRef.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.date.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      if (matchSearch) {
-        allFilteredEntries.push({ entry, pkg });
-      }
-    });
+  const allFilteredEntries: { entry: APIDevotional; pkg: Package }[] = [];
+  filteredPackages.forEach((pkg: Package) => {
+    if (pkg.devotionals) {
+      pkg.devotionals.forEach((entry: APIDevotional) => {
+        const matchSearch =
+          entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          entry.scripture_reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          `day ${entry.default_day}`.includes(searchTerm.toLowerCase());
+        
+        if (matchSearch) {
+          allFilteredEntries.push({ entry, pkg });
+        }
+      });
+    }
   });
 
   // Paginated Entries
@@ -146,15 +121,33 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   const handleFileUploadClick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type !== "application/pdf") {
-        toast.error("Please upload a PDF file only.");
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (ext !== "pdf" && ext !== "docx" && ext !== "doc") {
+        toast.error("Please upload PDF, DOC, or DOCX files only.");
         return;
       }
       setSelectedFile(file);
       setIsProcessing(true);
-      setProcessingStep(0);
-      setProcessingProgress(0);
       setShowValidationReport(false);
+
+      uploadPackageMutation.mutate({
+        category: uploadCategory,
+        year: uploadYear,
+        file: file
+      }, {
+        onSuccess: (data) => {
+          setIsProcessing(false);
+          setUploadReport(data);
+          setShowValidationReport(true);
+          toast.success("Document parsed and draft package created!");
+          refetchHistory();
+        },
+        onError: (err: any) => {
+          setIsProcessing(false);
+          toast.error("Document parsing failed: " + (err.message || "Unknown error"));
+          setSelectedFile(null);
+        }
+      });
     }
   };
 
@@ -166,51 +159,72 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      if (file.type !== "application/pdf") {
-        toast.error("Please upload a PDF file only.");
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (ext !== "pdf" && ext !== "docx" && ext !== "doc") {
+        toast.error("Please upload PDF, DOC, or DOCX files only.");
         return;
       }
       setSelectedFile(file);
       setIsProcessing(true);
-      setProcessingStep(0);
-      setProcessingProgress(0);
       setShowValidationReport(false);
+
+      uploadPackageMutation.mutate({
+        category: uploadCategory,
+        year: uploadYear,
+        file: file
+      }, {
+        onSuccess: (data) => {
+          setIsProcessing(false);
+          setUploadReport(data);
+          setShowValidationReport(true);
+          toast.success("Document parsed and draft package created!");
+          refetchHistory();
+        },
+        onError: (err: any) => {
+          setIsProcessing(false);
+          toast.error("Document parsing failed: " + (err.message || "Unknown error"));
+          setSelectedFile(null);
+        }
+      });
     }
   };
 
   const handlePublish = () => {
-    // Generate parsed list
-    const generatedEntries = generate365Days(uploadCategory, uploadYear);
-    dispatch(
-      publishPackage({
-        category: uploadCategory,
-        year: uploadYear,
-        entries: generatedEntries
-      })
-    );
-    toast.success(`${uploadCategory} ${uploadYear} package successfully published!`);
+    if (!uploadReport || !uploadReport.package_id) return;
     
-    // Reset states
-    setShowPublishConfirm(false);
-    setShowValidationReport(false);
-    setSelectedFile(null);
-    
-    // Switch to Browse tab
-    setSelectedCategory(uploadCategory);
-    setSelectedYear(uploadYear);
-    setActiveTab("browse");
+    publishPackageMutation.mutate(uploadReport.package_id, {
+      onSuccess: () => {
+        toast.success(`${uploadCategory} ${uploadYear} package successfully published!`);
+        setShowPublishConfirm(false);
+        setShowValidationReport(false);
+        setSelectedFile(null);
+        setUploadReport(null);
+        
+        refetchHistory();
+        setSelectedCategory(uploadCategory);
+        setSelectedYear(uploadYear);
+        setActiveTab("browse");
+      },
+      onError: (err: any) => {
+        toast.error("Failed to publish package: " + (err.message || "Unknown error"));
+      }
+    });
   };
 
   const handleRollback = (pkgId: string, category: string, year: number) => {
-    dispatch(rollbackPackage({ packageId: pkgId }));
-    toast.success(`Active package set to ${category} ${year}`);
+    rollbackPackageMutation.mutate(pkgId, {
+      onSuccess: () => {
+        toast.success(`Active package set to ${category} ${year}`);
+        refetchHistory();
+      },
+      onError: (err: any) => {
+        toast.error("Failed to set active package: " + (err.message || "Unknown error"));
+      }
+    });
   };
 
-  const handleDelete = (pkgId: string) => {
-    if (confirm("Are you sure you want to delete this package? This cannot be undone.")) {
-      dispatch(deletePackage({ packageId: pkgId }));
-      toast.success("Package deleted successfully");
-    }
+  const handleDelete = (_pkgId: string) => {
+    toast.error("Delete package is disabled. Please roll back or upload a new draft instead.");
   };
 
   return (
@@ -298,9 +312,14 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                   }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
                 >
-                  <option value={2027}>2027</option>
-                  <option value={2026}>2026</option>
-                  <option value={2025}>2025</option>
+                  {Array.from({ length: 5 }, (_, i) => {
+                    const y = currentYear - 2 + i;
+                    return (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -365,24 +384,24 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="bg-slate-100 text-slate-700 text-xxs font-mono font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider">
-                          {entry.date}
+                          Day {entry.default_day}
                         </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm ${
-                          pkg.status === "Published" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${
+                          pkg.status.toLowerCase() === "published" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
                         }`}>
                           {pkg.status}
                         </span>
                       </div>
                       
                       <h3 className="font-extrabold text-slate-800 text-sm line-clamp-1 mt-1">{entry.title}</h3>
-                      <p className="text-xs font-semibold text-slate-400 italic leading-snug">{entry.scriptureRef}</p>
-                      <p className="text-xxs text-slate-500 line-clamp-2 leading-relaxed">{entry.scriptureText}</p>
+                      <p className="text-xs font-semibold text-slate-400 italic leading-snug">{entry.scripture_reference}</p>
+                      <p className="text-xxs text-slate-500 line-clamp-2 leading-relaxed">{entry.scripture_quote}</p>
                     </div>
 
                     <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
                       <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
                         <Clock className="w-3 h-3" />
-                        <span>{entry.readingTime} min read</span>
+                        <span>{Math.ceil((entry.body?.length || 1000) / 800)} min read</span>
                       </div>
                       <button
                         onClick={() => setPreviewDevotional(entry)}
@@ -487,28 +506,24 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                   onChange={(e) => setUploadYear(Number(e.target.value))}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500 disabled:opacity-60"
                 >
-                  <option value={2028}>2028 (Next Year)</option>
-                  <option value={2027}>2027 (Current Active)</option>
-                  <option value={2029}>2029</option>
+                  {Array.from({ length: 5 }, (_, i) => {
+                    const y = currentYear + i;
+                    let label = `${y}`;
+                    if (y === currentYear) {
+                      label = `${y} (Current Active)`;
+                    } else if (y === currentYear + 1) {
+                      label = `${y} (Next Year)`;
+                    }
+                    return (
+                      <option key={y} value={y}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
-              {/* Simulation Mode Selector */}
-              <div className="pt-4 border-t border-slate-50 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700">Simulate Parse Errors</label>
-                    <p className="text-[10px] text-slate-400 leading-normal">Enabling this generates mock extraction errors (missing days/duplicates) on upload.</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={simulateError}
-                    disabled={isProcessing}
-                    onChange={(e) => setSimulateError(e.target.checked)}
-                    className="w-4.5 h-4.5 text-orange-600 border-slate-300 rounded focus:ring-orange-500"
-                  />
-                </div>
-              </div>
+
             </div>
           </div>
 
@@ -530,10 +545,10 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 </div>
 
                 <label className="bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs tracking-wider px-6 py-3 rounded-xl transition-all shadow-md shadow-orange-600/10 hover:-translate-y-0.5 active:translate-y-0 cursor-pointer block">
-                  Choose PDF Document
+                  Choose Document (PDF/DOCX/DOC)
                   <input
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.docx,.doc"
                     onChange={handleFileUploadClick}
                     className="hidden"
                   />
@@ -544,9 +559,9 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                     <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md">Supported</span>
                     <span>PDF</span>
                   </div>
-                  <div className="flex flex-col items-center gap-1 opacity-50">
-                    <span>Future</span>
-                    <span>DOCX</span>
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md">Supported</span>
+                    <span>DOCX / DOC</span>
                   </div>
                   <div className="flex flex-col items-center gap-1 opacity-50">
                     <span>Future</span>
@@ -558,51 +573,12 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
 
             {/* PROCESSING LOADER SCREEN */}
             {isProcessing && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-white space-y-8 min-h-[350px] flex flex-col justify-center">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-baseline">
-                    <h3 className="font-bold text-lg text-orange-400">{uploadSteps[processingStep].title}</h3>
-                    <span className="text-xs font-semibold text-slate-400">{processingProgress}%</span>
-                  </div>
-                  <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-orange-500 rounded-full transition-all duration-75"
-                      style={{ width: `${processingProgress}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Animated status logs in terminal look */}
-                <div className="bg-black/40 border border-slate-800/80 rounded-xl p-4 font-mono text-xs text-slate-300 space-y-2 leading-relaxed">
-                  <div className="text-orange-500 font-bold">&gt; Initializing Devotional Extractor v2.4.1</div>
-                  
-                  {uploadSteps.map((step, idx) => {
-                    const isCompleted = idx < processingStep;
-                    const isCurrent = idx === processingStep;
-                    
-                    if (isCompleted) {
-                      return (
-                        <div key={idx} className="flex items-center justify-between text-slate-400">
-                          <span>✓ {step.title}</span>
-                          <span className="text-emerald-500">SUCCESS {step.barChar}</span>
-                        </div>
-                      );
-                    } else if (isCurrent) {
-                      return (
-                        <div key={idx} className="flex items-center justify-between text-orange-400 animate-pulse">
-                          <span>⚙ {step.title}</span>
-                          <span>RUNNING...</span>
-                        </div>
-                      );
-                    } else {
-                      return (
-                        <div key={idx} className="opacity-30">
-                          <span>⚬ {step.title}</span>
-                        </div>
-                      );
-                    }
-                  })}
-                </div>
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-white space-y-4 min-h-[350px] flex flex-col justify-center items-center text-center">
+                <div className="w-12 h-12 border-4 border-t-orange-500 border-slate-700 rounded-full animate-spin mb-2" />
+                <h3 className="font-bold text-lg text-orange-400">Uploading and Parsing Document...</h3>
+                <p className="text-xs text-slate-400 max-w-xs">
+                  We are parsing the devotional chapters, extracting days, verifying scripture quotations, and preparing the draft schedules on the database.
+                </p>
               </div>
             )}
 
@@ -631,23 +607,24 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 </div>
 
                 {/* Status indicator banner */}
-                {!simulateError ? (
+                {/* Status indicator banner */}
+                {uploadReport?.is_valid ? (
                   <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex gap-3 text-emerald-800">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                     <div>
                       <h4 className="font-bold text-sm">Validation Completed Successfully</h4>
                       <p className="text-xs text-emerald-700/90 leading-normal mt-0.5">
-                        This devotional package contains a complete cycle. It is formatted correctly and is ready to be published.
+                        This devotional package contains a complete set. It is formatted correctly and is ready to be published.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 flex gap-3 text-rose-800">
-                    <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex gap-3 text-amber-800">
+                    <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="font-bold text-sm">Document Parsing Failed</h4>
-                      <p className="text-xs text-rose-700/90 leading-normal mt-0.5">
-                        We detected formatting or structural issues in this PDF. Please correct the document and upload a new version.
+                      <h4 className="font-bold text-sm">Document Parsing Warnings</h4>
+                      <p className="text-xs text-amber-700/90 leading-normal mt-0.5">
+                        We detected formatting or layout diagnostics in this file. Review the warning checklist. You can still publish if the count is correct.
                       </p>
                     </div>
                   </div>
@@ -658,75 +635,47 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                   <div className="bg-slate-50 px-4 py-3 rounded-md border border-slate-150">
                     <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Entries Found</div>
                     <div className="text-xl font-mono font-extrabold text-slate-800 mt-0.5">
-                      {!simulateError ? "365" : "362"}
+                      {uploadReport?.total_parsed ?? 0}
                     </div>
                   </div>
                   <div className="bg-slate-50 px-4 py-3 rounded-md border border-slate-150">
-                    <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Dates Checked</div>
+                    <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Target Year</div>
                     <div className="text-xl font-mono font-extrabold text-slate-800 mt-0.5">
-                      {!simulateError ? "365" : "364"}
+                      {uploadYear}
                     </div>
                   </div>
                   <div className="bg-slate-50 px-4 py-3 rounded-md border border-slate-150">
-                    <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Scripture Refs</div>
-                    <div className="text-xl font-mono font-extrabold text-slate-800 mt-0.5">
-                      {!simulateError ? "365" : "363"}
+                    <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Category</div>
+                    <div className="text-[10px] font-extrabold text-slate-800 mt-1 truncate">
+                      {uploadCategory}
                     </div>
                   </div>
                   <div className="bg-slate-50 px-4 py-3 rounded-md border border-slate-150">
                     <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Diagnostics</div>
-                    <div className={`text-xl font-mono font-extrabold mt-0.5 ${!simulateError ? "text-emerald-600" : "text-rose-600"}`}>
-                      {!simulateError ? "0 Errors" : "3 Errors"}
+                    <div className={`text-xl font-mono font-extrabold mt-0.5 ${uploadReport?.is_valid ? "text-emerald-600" : "text-amber-600"}`}>
+                      {uploadReport?.issues?.length || 0} Warnings
                     </div>
                   </div>
                 </div>
 
                 {/* Diagnostic detailed issues */}
-                {simulateError ? (
-                  <div className="border border-rose-100 rounded-xl overflow-hidden">
-                    <div className="bg-rose-50/50 px-4 py-2 border-b border-rose-100 text-xxs font-bold text-rose-800 uppercase tracking-wider">
-                      Critical Document Errors
+                {uploadReport?.issues && uploadReport.issues.length > 0 && (
+                  <div className="border border-amber-100 rounded-xl overflow-hidden">
+                    <div className="bg-amber-50/50 px-4 py-2 border-b border-amber-100 text-xxs font-bold text-amber-800 uppercase tracking-wider">
+                      Document Processing Warnings
                     </div>
-                    <div className="p-4 space-y-3 text-xs leading-normal">
-                      <div className="flex gap-2 text-rose-700">
-                        <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
-                        <span><strong>Missing January 18:</strong> The day transition skips from Jan 17 to Jan 19.</span>
-                      </div>
-                      <div className="flex gap-2 text-rose-700">
-                        <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
-                        <span><strong>Missing Scripture on February 5:</strong> Title found but no reading content could be parsed.</span>
-                      </div>
-                      <div className="flex gap-2 text-rose-700">
-                        <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
-                        <span><strong>Duplicate March 12:</strong> Two distinct devotional segments are marked with the date March 12.</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Preview Extracted Segment (First 3 Days)</h4>
-                    <div className="space-y-2">
-                      <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
-                        <div className="space-y-0.5">
-                          <span className="bg-slate-200 text-slate-700 text-xxs font-bold px-1.5 py-0.5 rounded-md">January 1</span>
-                          <span className="text-slate-800 font-bold ml-2">Walking in Faith</span>
-                        </div>
-                        <span className="text-slate-400 italic">Hebrews 11:1-3</span>
-                      </div>
-                      <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
-                        <div className="space-y-0.5">
-                          <span className="bg-slate-200 text-slate-700 text-xxs font-bold px-1.5 py-0.5 rounded-md">January 2</span>
-                          <span className="text-slate-800 font-bold ml-2">Walking in Peace</span>
-                        </div>
-                        <span className="text-slate-400 italic">Psalm 46:10</span>
-                      </div>
-                      <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
-                        <div className="space-y-0.5">
-                          <span className="bg-slate-200 text-slate-700 text-xxs font-bold px-1.5 py-0.5 rounded-md">January 3</span>
-                          <span className="text-slate-800 font-bold ml-2">Walking in Deliverance</span>
-                        </div>
-                        <span className="text-slate-400 italic">Psalm 91:1-2</span>
-                      </div>
+                    <div className="p-4 space-y-3 text-xs leading-normal max-h-[160px] overflow-y-auto font-mono">
+                      {uploadReport.issues.map((issue: any, idx: number) => {
+                        const label = issue.day_of_year > 0
+                          ? `Day ${issue.day_of_year} (${issue.date_text}): ${issue.message}`
+                          : issue.message;
+                        return (
+                          <div key={idx} className="flex gap-2 text-amber-800">
+                            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <span>{label}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -737,19 +686,18 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                     onClick={() => {
                       setShowValidationReport(false);
                       setSelectedFile(null);
+                      setUploadReport(null);
                     }}
                     className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold tracking-wide cursor-pointer"
                   >
-                    {!simulateError ? "Cancel" : "Upload Different File"}
+                    Cancel
                   </button>
-                  {!simulateError && (
-                    <button
-                      onClick={() => setShowPublishConfirm(true)}
-                      className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-semibold tracking-wide cursor-pointer shadow-md shadow-orange-600/10"
-                    >
-                      Publish Package
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setShowPublishConfirm(true)}
+                    className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-semibold tracking-wide cursor-pointer shadow-md shadow-orange-600/10"
+                  >
+                    Publish Package
+                  </button>
                 </div>
 
               </div>
@@ -797,31 +745,38 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 text-xs text-slate-700">
-                {allPackages
-                  .filter((p: DevotionalPackage) => p.category === selectedCategory)
-                  .map((pkg: DevotionalPackage) => (
-                    <tr key={pkg.id} className="hover:bg-slate-50/50">
-                      <td className="px-6 py-4 font-bold text-slate-800">
-                        {pkg.category} (<span className="font-mono text-slate-500 font-semibold">{pkg.year}</span>)
-                      </td>
-                      <td className="px-6 py-4 font-mono font-semibold text-slate-600">{pkg.entriesCount} Days</td>
-                      <td className="px-6 py-4">
-                        {pkg.status === "Published" ? (
-                          <span className="bg-emerald-50 text-emerald-700 text-xxs font-bold px-2 py-0.5 rounded-sm inline-flex items-center gap-1 border border-emerald-150">
-                            <span className="w-1 h-1 rounded-full bg-emerald-500" />
-                            <span>Active / Published</span>
-                          </span>
-                        ) : (
-                          <span className="bg-slate-100 text-slate-500 text-xxs font-semibold px-2 py-0.5 rounded-sm border border-slate-150">
-                            Archived
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 font-mono">{pkg.publishedAt}</td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex gap-2 justify-end">
-                          {pkg.status !== "Published" ? (
-                            <>
+                {packages.map((pkg: Package) => (
+                  <tr key={pkg.id} className="hover:bg-slate-50/50">
+                    <td className="px-6 py-4 font-bold text-slate-800 font-sans">
+                      {pkg.category} (<span className="font-mono text-slate-500 font-semibold">{pkg.year}</span>)
+                    </td>
+                    <td className="px-6 py-4 font-mono font-semibold text-slate-600">
+                      {pkg.devotionals?.length ?? 0} Days
+                    </td>
+                    <td className="px-6 py-4">
+                      {pkg.status.toLowerCase() === "published" ? (
+                        <span className="bg-emerald-50 text-emerald-700 text-xxs font-bold px-2 py-0.5 rounded-sm inline-flex items-center gap-1 border border-emerald-150">
+                          <span className="w-1 h-1 rounded-full bg-emerald-500" />
+                          <span>Active / Published</span>
+                        </span>
+                      ) : pkg.status.toLowerCase() === "draft" ? (
+                        <span className="bg-amber-50 text-amber-600 text-xxs font-semibold px-2 py-0.5 rounded-sm border border-amber-150">
+                          Draft
+                        </span>
+                      ) : (
+                        <span className="bg-slate-100 text-slate-500 text-xxs font-semibold px-2 py-0.5 rounded-sm border border-slate-150">
+                          Archived
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-slate-500 font-mono">
+                      {moment(pkg.uploaded_at).format("MMM DD, YYYY")}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex gap-2 justify-end">
+                        {pkg.status.toLowerCase() !== "published" ? (
+                          <>
+                            {pkg.status.toLowerCase() === "archived" && (
                               <button
                                 onClick={() => handleRollback(pkg.id, pkg.category, pkg.year)}
                                 title="Rollback / Set Active"
@@ -830,23 +785,24 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                                 <RotateCcw className="w-3.5 h-3.5" />
                                 <span>Set Active</span>
                               </button>
-                              <button
-                                onClick={() => handleDelete(pkg.id)}
-                                title="Delete Package"
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider select-none px-3 py-1">
-                              Current Active
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            )}
+                            <button
+                              onClick={() => handleDelete(pkg.id)}
+                              title="Delete Package"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider select-none px-3 py-1">
+                            Current Active
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -864,7 +820,7 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
             <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
               <div className="space-y-0.5">
                 <span className="bg-orange-600 text-white text-xxs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  {previewDevotional.date}
+                  Day {previewDevotional.default_day}
                 </span>
                 <h3 className="font-extrabold text-md mt-1 leading-snug">{previewDevotional.title}</h3>
               </div>
@@ -882,18 +838,18 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
               {/* Scripture Section */}
               <div className="bg-orange-50/50 border-l-4 border-orange-500 p-4 rounded-r-xl">
                 <div className="font-bold text-xs text-orange-600 uppercase tracking-wider mb-1">
-                  Scripture Reading: {previewDevotional.scriptureRef}
+                  Scripture Reading: {previewDevotional.scripture_reference}
                 </div>
                 <div className="text-slate-800 font-semibold italic text-sm">
-                  "{previewDevotional.scriptureText}"
+                  "{previewDevotional.scripture_quote}"
                 </div>
               </div>
 
               {/* Devotional Body */}
               <div className="space-y-4">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Message</h4>
-                {previewDevotional.body.map((p, i) => (
-                  <p key={i} className="text-slate-600 text-justify">{p}</p>
+                {(typeof previewDevotional.body === "string" ? previewDevotional.body.split("\n\n") : []).map((p: string, i: number) => (
+                  <p key={i} className="text-slate-650 text-justify">{p}</p>
                 ))}
               </div>
 
@@ -912,13 +868,12 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
               {/* Action Points */}
               <div className="space-y-2">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Action Points</h4>
-                <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
-                  {previewDevotional.actionPoints.map((ap, i) => (
+                <ul className="list-disc pl-5 space-y-1.5 text-slate-650">
+                  {(typeof previewDevotional.action_points === "string" ? JSON.parse(previewDevotional.action_points || "[]") : []).map((ap: string, i: number) => (
                     <li key={i}>{ap}</li>
                   ))}
                 </ul>
               </div>
-
             </div>
 
             {/* Modal Footer */}
