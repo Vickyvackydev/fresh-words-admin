@@ -12,10 +12,11 @@ import {
   RotateCcw,
   Trash2,
   BookOpen,
-  Sparkles
+  Sparkles,
+  Plus
 } from "lucide-react";
 import toast from "../components/CustomToast";
-import { usePackageHistory, useUploadPackage, usePublishPackage, useRollbackPackage } from "../api/hooks";
+import { usePackageHistory, useUploadPackage, usePublishPackage, useRollbackPackage, useDeletePackage, useUpdateDevotional } from "../api/hooks";
 import { Package, Devotional as APIDevotional } from "../api/services";
 import moment from "moment";
 
@@ -28,6 +29,8 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   const uploadPackageMutation = useUploadPackage();
   const publishPackageMutation = usePublishPackage();
   const rollbackPackageMutation = useRollbackPackage();
+  const deletePackageMutation = useDeletePackage();
+  const updateDevotionalMutation = useUpdateDevotional();
 
   // Tabs: 'browse' | 'upload' | 'history'
   const [activeTab, setActiveTab] = useState<"browse" | "upload" | "history">("browse");
@@ -45,7 +48,7 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   });
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
-  const [selectedStatus, setSelectedStatus] = useState<string>("All");
+  const [selectedStatus, setSelectedStatus] = useState<string>("Published");
   const [searchTerm, setSearchTerm] = useState("");
 
   // Sync category selection if set from sidebar
@@ -59,6 +62,15 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
 
   // Preview Modal States
   const [previewDevotional, setPreviewDevotional] = useState<APIDevotional | null>(null);
+
+  // Edit Modal States
+  const [editingDevotional, setEditingDevotional] = useState<APIDevotional | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editScriptureReference, setEditScriptureReference] = useState("");
+  const [editScriptureQuote, setEditScriptureQuote] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [editPrayer, setEditPrayer] = useState("");
+  const [editReflection, setEditReflection] = useState("");
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -74,6 +86,10 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   const [showValidationReport, setShowValidationReport] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [uploadReport, setUploadReport] = useState<any>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [deletingPackage, setDeletingPackage] = useState<Package | null>(null);
+  const [packageIdToAppend, setPackageIdToAppend] = useState<string | null>(null);
 
   // Sync upload category selector with selected category when selected category changes
   useEffect(() => {
@@ -127,27 +143,7 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
         return;
       }
       setSelectedFile(file);
-      setIsProcessing(true);
       setShowValidationReport(false);
-
-      uploadPackageMutation.mutate({
-        category: uploadCategory,
-        year: uploadYear,
-        file: file
-      }, {
-        onSuccess: (data) => {
-          setIsProcessing(false);
-          setUploadReport(data);
-          setShowValidationReport(true);
-          toast.success("Document parsed and draft package created!");
-          refetchHistory();
-        },
-        onError: (err: any) => {
-          setIsProcessing(false);
-          toast.error("Document parsing failed: " + (err.message || "Unknown error"));
-          setSelectedFile(null);
-        }
-      });
     }
   };
 
@@ -165,28 +161,71 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
         return;
       }
       setSelectedFile(file);
-      setIsProcessing(true);
       setShowValidationReport(false);
+    }
+  };
 
-      uploadPackageMutation.mutate({
-        category: uploadCategory,
-        year: uploadYear,
-        file: file
-      }, {
-        onSuccess: (data) => {
-          setIsProcessing(false);
-          setUploadReport(data);
-          setShowValidationReport(true);
+  const handleProceedUpload = () => {
+    if (!selectedFile) return;
+
+    setIsProcessing(true);
+    setUploadProgress(0);
+    setShowValidationReport(false);
+
+    const controller = new AbortController();
+    setAbortController(controller);
+
+    uploadPackageMutation.mutate({
+      category: uploadCategory,
+      year: uploadYear,
+      file: selectedFile,
+      packageId: packageIdToAppend || undefined,
+      onProgress: (percent) => setUploadProgress(percent),
+      signal: controller.signal,
+    }, {
+      onSuccess: (data) => {
+        setIsProcessing(false);
+        setUploadReport(data);
+        setShowValidationReport(true);
+        if (packageIdToAppend) {
+          toast.success("Devotionals successfully appended to draft package!");
+        } else {
           toast.success("Document parsed and draft package created!");
-          refetchHistory();
-        },
-        onError: (err: any) => {
-          setIsProcessing(false);
+        }
+        setPackageIdToAppend(null);
+        refetchHistory();
+        setAbortController(null);
+      },
+      onError: (err: any) => {
+        setIsProcessing(false);
+        setAbortController(null);
+        if (err.name !== "CanceledError" && err.message !== "canceled") {
           toast.error("Document parsing failed: " + (err.message || "Unknown error"));
           setSelectedFile(null);
         }
-      });
+      }
+    });
+  };
+
+  const handleCancelUpload = () => {
+    if (abortController) {
+      abortController.abort();
     }
+    setIsProcessing(false);
+    setSelectedFile(null);
+    setAbortController(null);
+    setUploadProgress(0);
+    toast.info("Upload canceled by user");
+  };
+
+  const handleAppendClick = (pkg: Package) => {
+    setUploadCategory(pkg.category as any);
+    setUploadYear(pkg.year);
+    setPackageIdToAppend(pkg.id);
+    setSelectedFile(null);
+    setShowValidationReport(false);
+    setActiveTab("upload");
+    toast.info(`Switched to Append Mode. Appending to: ${pkg.category} (${pkg.year})`);
   };
 
   const handlePublish = () => {
@@ -216,6 +255,9 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
       onSuccess: () => {
         toast.success(`Active package set to ${category} ${year}`);
         refetchHistory();
+        setSelectedCategory(category as any);
+        setSelectedYear(year);
+        setActiveTab("browse");
       },
       onError: (err: any) => {
         toast.error("Failed to set active package: " + (err.message || "Unknown error"));
@@ -223,8 +265,84 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
     });
   };
 
-  const handleDelete = (_pkgId: string) => {
-    toast.error("Delete package is disabled. Please roll back or upload a new draft instead.");
+  const handlePublishDraft = (pkgId: string, category: string, year: number) => {
+    publishPackageMutation.mutate(pkgId, {
+      onSuccess: () => {
+        toast.success(`${category} ${year} package successfully published!`);
+        refetchHistory();
+        setSelectedCategory(category as any);
+        setSelectedYear(year);
+        setActiveTab("browse");
+      },
+      onError: (err: any) => {
+        toast.error("Failed to publish package: " + (err.message || "Unknown error"));
+      }
+    });
+  };
+
+  const handleDeleteClick = (pkg: Package) => {
+    setDeletingPackage(pkg);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingPackage) return;
+    deletePackageMutation.mutate(deletingPackage.id, {
+      onSuccess: () => {
+        toast.success("Package deleted successfully");
+        setDeletingPackage(null);
+        refetchHistory();
+      },
+      onError: (err: any) => {
+        toast.error("Failed to delete package: " + (err.message || "Unknown error"));
+        setDeletingPackage(null);
+      }
+    });
+  };
+
+  const handleStartEdit = (devo: APIDevotional) => {
+    setEditingDevotional(devo);
+    setEditTitle(devo.title);
+    setEditScriptureReference(devo.scripture_reference);
+    setEditScriptureQuote(devo.scripture_quote);
+    setEditBody(devo.body);
+    setEditPrayer(devo.prayer || "");
+    setEditReflection(devo.reflection || "");
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingDevotional) return;
+    
+    updateDevotionalMutation.mutate({
+      devotionalId: editingDevotional.id,
+      data: {
+        title: editTitle,
+        scripture_reference: editScriptureReference,
+        scripture_quote: editScriptureQuote,
+        body: editBody,
+        prayer: editPrayer,
+        reflection: editReflection,
+      }
+    }, {
+      onSuccess: () => {
+        toast.success("Devotional updated successfully!");
+        setEditingDevotional(null);
+        if (previewDevotional && previewDevotional.id === editingDevotional.id) {
+          setPreviewDevotional({
+            ...previewDevotional,
+            title: editTitle,
+            scripture_reference: editScriptureReference,
+            scripture_quote: editScriptureQuote,
+            body: editBody,
+            prayer: editPrayer,
+            reflection: editReflection,
+          });
+        }
+        refetchHistory();
+      },
+      onError: (err: any) => {
+        toast.error("Failed to update devotional: " + (err.message || "Unknown error"));
+      }
+    });
   };
 
   return (
@@ -376,43 +494,61 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
             <div className="space-y-6">
               {/* Entries Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {paginatedEntries.map(({ entry, pkg }) => (
-                  <div 
-                    key={entry.id}
-                    className="bg-white rounded-xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="bg-slate-100 text-slate-700 text-xxs font-mono font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider">
-                          Day {entry.default_day}
-                        </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${
-                          pkg.status.toLowerCase() === "published" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
-                        }`}>
-                          {pkg.status}
-                        </span>
+                {paginatedEntries.map(({ entry, pkg }) => {
+                  const needsAttention = !entry.title || entry.title.trim() === "" || !entry.body || entry.body.trim().length < 10;
+                  return (
+                    <div 
+                      key={entry.id}
+                      className="bg-white rounded-xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="bg-slate-100 text-slate-700 text-xxs font-mono font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider">
+                            Day {entry.default_day}
+                          </span>
+                          {needsAttention ? (
+                            <span className="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-sm inline-flex items-center gap-1 border border-red-100 animate-pulse">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Needs Attention</span>
+                            </span>
+                          ) : (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${
+                              pkg.status.toLowerCase() === "published" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {pkg.status}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <h3 className="font-extrabold text-slate-800 text-sm line-clamp-1 mt-1">{entry.title || "[No Title]"}</h3>
+                        <p className="text-xs font-semibold text-slate-400 italic leading-snug">{entry.scripture_reference || "[No Scripture]"}</p>
+                        <p className="text-xxs text-slate-500 line-clamp-2 leading-relaxed">{entry.scripture_quote || "[No Quote]"}</p>
                       </div>
-                      
-                      <h3 className="font-extrabold text-slate-800 text-sm line-clamp-1 mt-1">{entry.title}</h3>
-                      <p className="text-xs font-semibold text-slate-400 italic leading-snug">{entry.scripture_reference}</p>
-                      <p className="text-xxs text-slate-500 line-clamp-2 leading-relaxed">{entry.scripture_quote}</p>
-                    </div>
 
-                    <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
-                        <Clock className="w-3 h-3" />
-                        <span>{Math.ceil((entry.body?.length || 1000) / 800)} min read</span>
+                      <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
+                          <Clock className="w-3 h-3" />
+                          <span>{Math.ceil((entry.body?.length || 1000) / 800)} min read</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleStartEdit(entry)}
+                            className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          >
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => setPreviewDevotional(entry)}
+                            className="text-xs font-bold text-orange-600 hover:text-orange-750 transition-colors flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>Preview...</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => setPreviewDevotional(entry)}
-                        className="text-xs font-bold text-orange-600 hover:text-orange-750 transition-colors flex items-center gap-0.5 cursor-pointer"
-                      >
-                        <span>Preview...</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Pagination Controls */}
@@ -486,7 +622,7 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Category</label>
                 <select
                   value={uploadCategory}
-                  disabled={isProcessing || showValidationReport}
+                  disabled={isProcessing || showValidationReport || packageIdToAppend !== null}
                   onChange={(e) => setUploadCategory(e.target.value as any)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500 disabled:opacity-60"
                 >
@@ -502,7 +638,7 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Target Year</label>
                 <select
                   value={uploadYear}
-                  disabled={isProcessing || showValidationReport}
+                  disabled={isProcessing || showValidationReport || packageIdToAppend !== null}
                   onChange={(e) => setUploadYear(Number(e.target.value))}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500 disabled:opacity-60"
                 >
@@ -535,50 +671,129 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 onDrop={handleDrop}
                 className="bg-white border border-dashed border-slate-200/50 rounded-xl p-12 text-center hover:border-orange-500 transition-colors flex flex-col items-center justify-center min-h-[350px] shadow-xs"
               >
-                <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl mb-4">
-                  <UploadCloud className="w-10 h-10" />
-                </div>
-
-                <div className="space-y-1 mb-5">
-                  <h3 className="font-extrabold text-slate-800 text-lg">Upload Devotion Document</h3>
-                  <p className="text-xs text-slate-400">Drag and drop your devotion file here, or click to choose from directory</p>
-                </div>
-
-                <label className="bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs tracking-wider px-6 py-3 rounded-xl transition-all shadow-md shadow-orange-600/10 hover:-translate-y-0.5 active:translate-y-0 cursor-pointer block">
-                  Choose Document (PDF/DOCX/DOC)
-                  <input
-                    type="file"
-                    accept=".pdf,.docx,.doc"
-                    onChange={handleFileUploadClick}
-                    className="hidden"
-                  />
-                </label>
-
-                <div className="mt-8 grid grid-cols-3 gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-6 w-full max-w-md">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md">Supported</span>
-                    <span>PDF</span>
+                {selectedFile ? (
+                  <div className="space-y-6 w-full max-w-md flex flex-col items-center">
+                    <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl">
+                      <UploadCloud className="w-10 h-10 animate-bounce" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="font-extrabold text-slate-800 text-lg">Selected File</h3>
+                      <p className="font-mono text-sm font-semibold text-slate-700 break-all">{selectedFile.name}</p>
+                      <p className="text-xs text-slate-400 font-semibold font-mono">Size: {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                    
+                    <div className="flex gap-4 w-full pt-2">
+                      <label className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-xl text-xs font-bold tracking-wider transition-colors cursor-pointer text-center block">
+                        Change File
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc"
+                          onChange={handleFileUploadClick}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        onClick={handleProceedUpload}
+                        className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs tracking-wider rounded-xl transition-all shadow-md shadow-orange-600/10 hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                      >
+                        Proceed to Upload
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md">Supported</span>
-                    <span>DOCX / DOC</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1 opacity-50">
-                    <span>Future</span>
-                    <span>EXCEL</span>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl mb-4">
+                      <UploadCloud className="w-10 h-10" />
+                    </div>
+
+                    <div className="space-y-1 mb-5">
+                      {packageIdToAppend ? (
+                        <>
+                          <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2 justify-center">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                            <span>Append Part to Draft</span>
+                          </h3>
+                          <p className="text-xs font-semibold font-mono text-slate-650">
+                            Target Draft: {uploadCategory} {uploadYear}
+                          </p>
+                          <button
+                            onClick={() => {
+                              setPackageIdToAppend(null);
+                              toast.info("Returned to standard package upload");
+                            }}
+                            className="mt-2 text-xxs text-slate-400 hover:text-slate-600 underline font-bold tracking-wider uppercase cursor-pointer"
+                          >
+                            Cancel Append Mode
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="font-extrabold text-slate-800 text-lg">Upload Devotion Document</h3>
+                          <p className="text-xs text-slate-400">Drag and drop your devotion file here, or click to choose from directory</p>
+                        </>
+                      )}
+                    </div>
+
+                    <label className="bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs tracking-wider px-6 py-3 rounded-xl transition-all shadow-md shadow-orange-600/10 hover:-translate-y-0.5 active:translate-y-0 cursor-pointer block">
+                      Choose Document (PDF/DOCX/DOC)
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.doc"
+                        onChange={handleFileUploadClick}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <div className="mt-8 grid grid-cols-3 gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-6 w-full max-w-md">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md">Supported</span>
+                        <span>PDF</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md">Supported</span>
+                        <span>DOCX / DOC</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 opacity-50">
+                        <span>Future</span>
+                        <span>EXCEL</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
             {/* PROCESSING LOADER SCREEN */}
             {isProcessing && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-white space-y-4 min-h-[350px] flex flex-col justify-center items-center text-center">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-white space-y-5 min-h-[350px] flex flex-col justify-center items-center text-center font-sans">
                 <div className="w-12 h-12 border-4 border-t-orange-500 border-slate-700 rounded-full animate-spin mb-2" />
-                <h3 className="font-bold text-lg text-orange-400">Uploading and Parsing Document...</h3>
-                <p className="text-xs text-slate-400 max-w-xs">
-                  We are parsing the devotional chapters, extracting days, verifying scripture quotations, and preparing the draft schedules on the database.
+                
+                <div className="space-y-1">
+                  <h3 className="font-extrabold text-lg text-orange-400">Uploading and Parsing Document...</h3>
+                  <p className="text-[10px] font-bold text-slate-550 uppercase tracking-widest">
+                    Upload Progress: {uploadProgress}%
+                  </p>
+                </div>
+
+                <div className="w-full max-w-xs bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-orange-500 h-full transition-all duration-300 rounded-full" 
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+
+                <p className="text-xs text-slate-450 max-w-xs leading-normal">
+                  {uploadProgress < 100 
+                    ? "Sending document bytes to server. Do not close this tab." 
+                    : "We are parsing the devotional chapters, extracting days, verifying scriptures, and preparing the database draft..."}
                 </p>
+
+                <button
+                  onClick={handleCancelUpload}
+                  className="px-6 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 text-xs font-bold tracking-wide rounded-xl transition-colors cursor-pointer mt-2"
+                >
+                  Cancel Upload
+                </button>
               </div>
             )}
 
@@ -786,8 +1001,28 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                                 <span>Set Active</span>
                               </button>
                             )}
-                            <button
-                              onClick={() => handleDelete(pkg.id)}
+                            {pkg.status.toLowerCase() === "draft" && (
+                              <>
+                                <button
+                                  onClick={() => handlePublishDraft(pkg.id, pkg.category, pkg.year)}
+                                  title="Publish Draft"
+                                  className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-bold px-2.5 py-1.5 rounded-lg border border-emerald-100 transition-colors cursor-pointer"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Publish</span>
+                                </button>
+                                <button
+                                  onClick={() => handleAppendClick(pkg)}
+                                  title="Append split part/file to this draft package"
+                                  className="inline-flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 font-bold px-2.5 py-1.5 rounded-lg border border-amber-100 transition-colors cursor-pointer"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Append Part</span>
+                                </button>
+                              </>
+                            )}
+                             <button
+                              onClick={() => handleDeleteClick(pkg)}
                               title="Delete Package"
                               className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                             >
@@ -877,12 +1112,129 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-50 bg-slate-50 flex justify-end">
+            <div className="px-6 py-4 border-t border-slate-50 bg-slate-50 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setPreviewDevotional(null);
+                  handleStartEdit(previewDevotional);
+                }}
+                className="px-5 py-2 border border-slate-205 text-slate-700 font-semibold text-xs tracking-wide rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Edit
+              </button>
               <button
                 onClick={() => setPreviewDevotional(null)}
                 className="px-5 py-2 bg-slate-900 text-white font-semibold text-xs tracking-wide rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 Close Preview
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL 3: DEVOTIONAL ENTRY EDIT MODAL
+          ======================================================== */}
+      {editingDevotional && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 font-sans">
+          <div className="bg-white border border-slate-100 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-left">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+              <div className="space-y-0.5">
+                <span className="bg-orange-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Day {editingDevotional.default_day}
+                </span>
+                <h3 className="font-extrabold text-md mt-1 leading-snug">Edit Devotional Entry</h3>
+              </div>
+              <button
+                onClick={() => setEditingDevotional(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin text-slate-700 text-sm">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2 md:col-span-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Scripture Reference</label>
+                  <input
+                    type="text"
+                    value={editScriptureReference}
+                    onChange={(e) => setEditScriptureReference(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-2 md:col-span-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Scripture Quote</label>
+                  <input
+                    type="text"
+                    value={editScriptureQuote}
+                    onChange={(e) => setEditScriptureQuote(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Message Body</label>
+                <textarea
+                  rows={8}
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500 leading-relaxed"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Prayer Point</label>
+                <textarea
+                  rows={2}
+                  value={editPrayer}
+                  onChange={(e) => setEditPrayer(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Reflection</label>
+                <textarea
+                  rows={2}
+                  value={editReflection}
+                  onChange={(e) => setEditReflection(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-slate-50 bg-slate-50 flex justify-end gap-3">
+              <button
+                onClick={() => setEditingDevotional(null)}
+                className="px-5 py-2 border border-slate-200 text-slate-600 font-semibold text-xs tracking-wide rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={updateDevotionalMutation.isPending}
+                className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer shadow-md shadow-orange-600/10 disabled:opacity-50"
+              >
+                {updateDevotionalMutation.isPending ? "Saving..." : "Save Changes"}
               </button>
             </div>
 
@@ -924,6 +1276,49 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-semibold tracking-wide cursor-pointer shadow-md shadow-orange-600/10"
               >
                 Publish Package
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL 4: DELETE PACKAGE CONFIRMATION
+          ======================================================== */}
+      {deletingPackage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white border border-slate-100 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4 font-sans text-left">
+            <div className="p-3 bg-red-50 text-red-600 rounded-xl w-fit">
+              <Trash2 className="w-6 h-6 animate-pulse" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-slate-800 text-lg font-sans">Delete Devotional Package?</h3>
+              <p className="text-xs text-slate-400 leading-normal font-sans">
+                Are you sure you want to permanently delete the <strong>{deletingPackage.category} ({deletingPackage.year})</strong> package?
+              </p>
+            </div>
+
+            <div className="bg-red-50/50 border border-red-100 rounded-xl p-3.5 flex gap-2 text-red-800 text-xs leading-normal font-sans">
+              <AlertCircle className="w-4.5 h-4.5 text-red-600 flex-shrink-0 mt-0.5" />
+              <span>
+                <strong>Warning:</strong> This will permanently erase the package metadata, all <strong>{deletingPackage.devotionals?.length ?? 365} devotionals</strong>, schedules, reads, and user bookmarks associated with it. This action cannot be undone.
+              </span>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-2 font-sans">
+              <button
+                onClick={() => setDeletingPackage(null)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-lg text-xs font-semibold tracking-wide cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deletePackageMutation.isPending}
+                className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold tracking-wide cursor-pointer shadow-md shadow-red-600/10 disabled:opacity-50"
+              >
+                {deletePackageMutation.isPending ? "Deleting..." : "Permanently Delete"}
               </button>
             </div>
           </div>

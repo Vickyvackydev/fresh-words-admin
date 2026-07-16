@@ -1,4 +1,3 @@
-import React from "react";
 import { Bell, Clock, Shuffle, CheckCircle, Loader2 } from "lucide-react";
 import toast from "../components/CustomToast";
 import { useAdminSettings, useUpdateAdminSettings } from "../api/hooks";

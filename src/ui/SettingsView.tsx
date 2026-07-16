@@ -13,6 +13,8 @@ export default function SettingsView() {
   const [termsOfService, setTermsOfService] = useState("");
   const [aboutUs, setAboutUs] = useState("");
   const [logoPreview, setLogoPreview] = useState<string>("");
+  const [dailyQuoteText, setDailyQuoteText] = useState("");
+  const [dailyQuoteAuthor, setDailyQuoteAuthor] = useState("");
 
   useEffect(() => {
     if (settings) {
@@ -22,6 +24,8 @@ export default function SettingsView() {
       setTermsOfService(settings.terms_of_service_url || "");
       setAboutUs(settings.about_us || "");
       setLogoPreview(settings.app_logo_url || "");
+      setDailyQuoteText(settings.daily_quote_text || "");
+      setDailyQuoteAuthor(settings.daily_quote_author || "");
     }
   }, [settings]);
 
@@ -60,6 +64,8 @@ export default function SettingsView() {
         terms_of_service_url: termsOfService,
         about_us: aboutUs,
         app_logo_url: logoPreview,
+        daily_quote_text: dailyQuoteText,
+        daily_quote_author: dailyQuoteAuthor,
       },
       {
         onSuccess: () => {
@@ -212,6 +218,30 @@ export default function SettingsView() {
                   onChange={(e) => setAboutUs(e.target.value)}
                   placeholder="Describe your ministry or app details..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 text-sm text-slate-700 font-medium focus:outline-none focus:border-orange-500 resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Daily Quote Text */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Daily Quote Text</label>
+                <textarea
+                  rows={2}
+                  value={dailyQuoteText}
+                  onChange={(e) => setDailyQuoteText(e.target.value)}
+                  placeholder="Daily inspirational quote shown on home feed..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 text-sm text-slate-700 font-medium focus:outline-none focus:border-orange-500 resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Daily Quote Author */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Daily Quote Author</label>
+                <input
+                  type="text"
+                  value={dailyQuoteAuthor}
+                  onChange={(e) => setDailyQuoteAuthor(e.target.value)}
+                  placeholder="e.g. Billy Graham, Proverbs 3:5"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
                 />
               </div>
             </div>

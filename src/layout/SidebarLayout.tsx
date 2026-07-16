@@ -15,8 +15,7 @@ import {
   User,
 } from "lucide-react";
 import { reset, selectUser } from "../state/slices/authReducer";
-import { selectUnreadCount } from "../state/slices/feedbackSlice";
-import { useAdminSettings } from "../api/hooks";
+import { useAdminSettings, useDashboardStats } from "../api/hooks";
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
@@ -37,8 +36,9 @@ export default function SidebarLayout({
   const dispatch = useDispatch();
 
   const user = useSelector(selectUser);
-  const unreadFeedbackCount = useSelector(selectUnreadCount);
+  const { data: stats } = useDashboardStats();
   const { data: settings } = useAdminSettings();
+  const unreadFeedbackCount = stats?.unread_feedback ?? 0;
 
   const handleLogout = () => {
     dispatch(reset());

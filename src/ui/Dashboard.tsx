@@ -210,7 +210,7 @@ export default function Dashboard() {
                 <div className="w-full flex justify-center gap-1 items-end h-full">
                   {/* Reads Bar */}
                   <div
-                    className="w-2.5 sm:w-4 bg-slate-650 rounded-t-xs transition-all duration-300 hover:bg-slate-550 relative"
+                    className="w-2.5 sm:w-4 bg-slate-600 rounded-t-xs transition-all duration-300 hover:bg-slate-750 relative"
                     style={{ height: `${(item.reads / maxVal) * 100}%` }}
                     title={`Reads: ${item.reads}`}
                   />

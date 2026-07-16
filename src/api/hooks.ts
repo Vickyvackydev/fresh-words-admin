@@ -54,7 +54,7 @@ export function useAdminSettings() {
 export function useUpdateAdminSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (settings: Settings) => adminService.updateSettings(settings),
+    mutationFn: (settings: Partial<Settings>) => adminService.updateSettings(settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
     },
@@ -67,11 +67,17 @@ export function useUploadPackage() {
       category,
       year,
       file,
+      packageId,
+      onProgress,
+      signal,
     }: {
       category: string;
       year: number;
       file: File;
-    }) => adminService.uploadPackage(category, year, file),
+      packageId?: string;
+      onProgress?: (percent: number) => void;
+      signal?: AbortSignal;
+    }) => adminService.uploadPackage(category, year, file, packageId, onProgress, signal),
   });
 }
 
@@ -101,5 +107,36 @@ export function usePackageHistory(category: string) {
     queryKey: ["admin", "packages", "history", category],
     queryFn: () => adminService.getPackageHistory(category),
     enabled: !!category,
+  });
+}
+
+export function useDeletePackage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (packageId: string) => adminService.deletePackage(packageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "packages"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
+    },
+  });
+}
+
+export function useUpdateDevotional() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ devotionalId, data }: {
+      devotionalId: string;
+      data: {
+        title: string;
+        scripture_reference?: string;
+        scripture_quote?: string;
+        body: string;
+        prayer?: string;
+        reflection?: string;
+      };
+    }) => adminService.updateDevotional(devotionalId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "packages"] });
+    },
   });
 }

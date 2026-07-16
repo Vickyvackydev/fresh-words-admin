@@ -59,6 +59,9 @@ export interface Settings {
   yearly_devotional_enabled: boolean;
   yearly_devotional_time: string;
   yearly_devotional_randomize: boolean;
+
+  daily_quote_text?: string;
+  daily_quote_author?: string;
 }
 
 export interface Devotional {
@@ -135,7 +138,7 @@ export const adminService = {
     return response.data.data;
   },
 
-  updateSettings: async (settings: Settings): Promise<Settings> => {
+  updateSettings: async (settings: Partial<Settings>): Promise<Settings> => {
     const response = await api.put("/admin/settings", settings);
     return response.data.data;
   },
@@ -144,16 +147,29 @@ export const adminService = {
     category: string,
     year: number,
     file: File,
-  ): Promise<UploadResponse> => {
+    packageId?: string,
+    onProgress?: (percent: number) => void,
+    signal?: AbortSignal
+  ): Promise<any> => {
     const formData = new FormData();
     formData.append("category", category);
     formData.append("year", year.toString());
     formData.append("file", file);
+    if (packageId) {
+      formData.append("package_id", packageId);
+    }
 
     const response = await api.post("/admin/packages/upload", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total && onProgress) {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percent);
+        }
+      },
+      signal,
     });
     return response.data.data;
   },
@@ -176,6 +192,26 @@ export const adminService = {
     const response = await api.get("/admin/packages/history", {
       params: { category },
     });
+    return response.data.data;
+  },
+
+  deletePackage: async (packageId: string): Promise<any> => {
+    const response = await api.delete(`/admin/packages/${packageId}`);
+    return response.data.data;
+  },
+
+  updateDevotional: async (
+    devotionalId: string,
+    data: {
+      title: string;
+      scripture_reference?: string;
+      scripture_quote?: string;
+      body: string;
+      prayer?: string;
+      reflection?: string;
+    }
+  ): Promise<any> => {
+    const response = await api.put(`/admin/devotionals/${devotionalId}`, data);
     return response.data.data;
   },
 };

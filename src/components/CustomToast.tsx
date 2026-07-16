@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
 export type ToastType = "success" | "error" | "info" | "warning";

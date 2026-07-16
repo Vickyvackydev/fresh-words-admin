@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { selectToken, setToken } from "./state/slices/authReducer";
+import { useSelector } from "react-redux";
+import { selectToken } from "./state/slices/authReducer";
 
 import { useState, useEffect } from "react";
 

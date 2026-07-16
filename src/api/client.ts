@@ -2,7 +2,9 @@ import axios from "axios";
 import { Store } from "../state/store";
 import { reset } from "../state/slices/authReducer";
 export const api = axios.create({
-  baseURL: "http://localhost:8080/api/v1",
+  baseURL:
+    import.meta.env.VITE_API_URL ||
+    (import.meta.env.PROD ? "/api/v1" : "http://localhost:8080/api/v1"),
   headers: {
     "Content-Type": "application/json",
   },
