@@ -11,6 +11,8 @@ import Devotions from "./ui/Devotions";
 import NotificationsView from "./ui/NotificationsView";
 import FeedbackView from "./ui/FeedbackView";
 import SettingsView from "./ui/SettingsView";
+import PrivacyPolicy from "./ui/PrivacyPolicy";
+import TermsOfUse from "./ui/TermsOfUse";
 import SidebarLayout from "./layout/SidebarLayout";
 import { ToastContainer } from "./components/CustomToast";
 
@@ -51,6 +53,10 @@ function App() {
             !isAuthenticated ? <Login /> : <Navigate to="/dashboard" replace />
           }
         />
+
+        {/* Public Utility Routes */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfUse />} />
 
         {/* Authenticated Routes wrapped in SidebarLayout */}
         <Route
