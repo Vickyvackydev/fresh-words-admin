@@ -134,13 +134,13 @@ export default function PrivacyPolicy() {
         {/* Footer Link */}
         <div className="pt-8 border-t border-slate-100 flex justify-between items-center text-xs font-semibold text-slate-400">
           <span>&copy; {new Date().getFullYear()} Fresh Devotionals.</span>
-          <Link
+          {/* <Link
             to="/login"
             className="inline-flex items-center gap-1 text-orange-600 hover:text-orange-500 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Go to Admin Portal</span>
-          </Link>
+          </Link> */}
         </div>
       </div>
     </div>
