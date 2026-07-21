@@ -1,5 +1,5 @@
-import { FileText, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { FileText } from "lucide-react";
+// import { Link } from "react-router-dom";
 
 export default function TermsOfUse() {
   const lastUpdated = "July 17, 2026";
