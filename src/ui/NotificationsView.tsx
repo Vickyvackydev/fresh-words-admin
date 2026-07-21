@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import { Bell, Clock, Shuffle, CheckCircle, Loader2 } from "lucide-react";
 import toast from "../components/CustomToast";
 import { useAdminSettings, useUpdateAdminSettings } from "../api/hooks";
@@ -63,6 +64,7 @@ const TimeSelect = ({ value, onChange, disabled }: TimeSelectProps) => {
 export default function NotificationsView() {
   const { data: settingsData, isLoading, refetch } = useAdminSettings();
   const updateSettingsMutation = useUpdateAdminSettings();
+  const [loadingToggleId, setLoadingToggleId] = useState<string | null>(null);
 
   const settingsList = settingsData ? [
     {
@@ -96,6 +98,7 @@ export default function NotificationsView() {
   ] : [];
 
   const handleToggleEnabled = (id: string, enabled: boolean, category: string) => {
+    setLoadingToggleId(id);
     updateSettingsMutation.mutate({
       ...settingsData,
       [`${id}_enabled`]: enabled
@@ -103,9 +106,11 @@ export default function NotificationsView() {
       onSuccess: () => {
         refetch();
         toast.success(`${category} notifications ${enabled ? "enabled" : "disabled"}`);
+        setLoadingToggleId(null);
       },
       onError: (err: any) => {
         toast.error("Failed to update status: " + (err.message || "Unknown error"));
+        setLoadingToggleId(null);
       }
     });
   };
@@ -180,14 +185,20 @@ export default function NotificationsView() {
                   </div>
                   
                   {/* Enabled Toggle Switch */}
-                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <label className={`relative inline-flex items-center cursor-pointer select-none ${loadingToggleId === setting.id ? "opacity-70 pointer-events-none" : ""}`}>
                     <input
                       type="checkbox"
                       checked={setting.enabled}
+                      disabled={loadingToggleId === setting.id}
                       onChange={(e) => handleToggleEnabled(setting.id, e.target.checked, setting.category)}
                       className="sr-only peer"
                     />
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                    {loadingToggleId === setting.id && (
+                      <div className={`absolute top-[2px] h-5 w-5 flex items-center justify-center z-10 transition-all ${setting.enabled ? "left-[22px]" : "left-[2px]"}`}>
+                        <Loader2 className={`w-3.5 h-3.5 animate-spin ${setting.enabled ? "text-orange-600" : "text-slate-400"}`} />
+                      </div>
+                    )}
                   </label>
                 </div>
 
