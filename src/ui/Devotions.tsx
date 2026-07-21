@@ -13,7 +13,8 @@ import {
   Trash2,
   BookOpen,
   Sparkles,
-  Plus
+  Plus,
+  Loader2
 } from "lucide-react";
 import toast from "../components/CustomToast";
 import { usePackageHistory, useUploadPackage, usePublishPackage, useRollbackPackage, useDeletePackage, useUpdateDevotional } from "../api/hooks";
@@ -97,7 +98,12 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   }, [selectedCategory]);
 
   // Query packages history from backend (automatically refetches when category changes)
-  const { data: packages = [], refetch: refetchHistory } = usePackageHistory(selectedCategory);
+  const { 
+    data: packages = [], 
+    isLoading: isPackagesLoading, 
+    isFetching: isPackagesFetching, 
+    refetch: refetchHistory 
+  } = usePackageHistory(selectedCategory);
 
   const filteredPackages = packages.filter((pkg: Package) => {
     if (pkg.category !== selectedCategory) return false;
@@ -478,7 +484,15 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
           </div>
 
           {/* Devotion List */}
-          {allFilteredEntries.length === 0 ? (
+          {isPackagesLoading || (isPackagesFetching && packages.length === 0) ? (
+            <div className="bg-white border border-slate-100 rounded-2xl p-16 text-center space-y-4 shadow-xs flex flex-col items-center justify-center">
+              <Loader2 className="w-10 h-10 text-orange-600 animate-spin" />
+              <div className="space-y-1">
+                <h3 className="font-bold text-slate-700 text-base">Loading Devotionals...</h3>
+                <p className="text-xs text-slate-400">Fetching {selectedCategory} ({selectedYear}) from server...</p>
+              </div>
+            </div>
+          ) : allFilteredEntries.length === 0 ? (
             <div className="bg-white border border-slate-100 rounded-2xl p-16 text-center space-y-4 shadow-xs">
               <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto">
                 <BookOpen className="w-8 h-8" />

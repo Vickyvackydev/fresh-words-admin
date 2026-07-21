@@ -152,8 +152,8 @@ export default function NotificationsView() {
       
       {/* Heading */}
       <div className="flex flex-col gap-1 border-b border-slate-200 pb-5 w-full">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Notification Manager</h1>
-        <p className="text-xs text-slate-500">Configure delivery schedules and yearly randomization for each devotional category</p>
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Devotional Settings</h1>
+        <p className="text-xs text-slate-500">Control category availability in the mobile app and default delivery schedules for users.</p>
       </div>
 
       {/* Settings Grid */}
@@ -175,7 +175,7 @@ export default function NotificationsView() {
                     </div>
                     <div>
                       <h3 className="font-extrabold text-slate-800 text-base">{setting.category}</h3>
-                      <p className="text-xxs text-slate-400">Push notification schedule</p>
+                      <p className="text-xxs text-slate-400">Category availability in mobile app</p>
                     </div>
                   </div>
                   
@@ -195,7 +195,7 @@ export default function NotificationsView() {
                 <div className="pt-4 border-t border-slate-50 grid grid-cols-2 gap-4 items-center">
                   <div className="flex items-center gap-2 text-slate-700">
                     <Clock className="w-4 h-4 text-slate-400" />
-                    <span className="text-xs font-semibold">Delivery Time</span>
+                    <span className="text-xs font-semibold">Default Delivery Time</span>
                   </div>
                   
                   <div>
@@ -217,8 +217,8 @@ export default function NotificationsView() {
 
                   <div>
                     {isYearly ? (
-                      <span className="text-[10px] font-extrabold text-slate-400 bg-slate-100 border border-slate-200 px-3 py-1 rounded-md uppercase tracking-wider select-none">
-                        Randomize: OFF
+                      <span className="text-[10px] font-extrabold text-slate-400 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md uppercase tracking-wider select-none" title="Yearly devotional follows calendar date sequence and cannot be randomized">
+                        Disabled (Calendar Order)
                       </span>
                     ) : (
                       <label className="flex items-center gap-2 cursor-pointer">

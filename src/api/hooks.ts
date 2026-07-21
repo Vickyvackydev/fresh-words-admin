@@ -62,6 +62,7 @@ export function useUpdateAdminSettings() {
 }
 
 export function useUploadPackage() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       category,
@@ -78,6 +79,9 @@ export function useUploadPackage() {
       onProgress?: (percent: number) => void;
       signal?: AbortSignal;
     }) => adminService.uploadPackage(category, year, file, packageId, onProgress, signal),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "packages"] });
+    },
   });
 }
 

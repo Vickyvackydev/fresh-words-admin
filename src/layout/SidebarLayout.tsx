@@ -83,7 +83,7 @@ export default function SidebarLayout({
       isExpandable: true,
     },
     {
-      name: "Notifications",
+      name: "Devotional Settings",
       path: "/notifications",
       icon: Bell,
     },
