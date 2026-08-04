@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
-import { BookOpen, Shield, FileText, Smartphone, Star } from "lucide-react";
+import { Shield, FileText, Smartphone } from "lucide-react";
 import { FaApple, FaGooglePlay } from "react-icons/fa";
+import { useAdminSettings } from "../api/hooks";
 
 export default function StoreView() {
+  const { data: settings } = useAdminSettings();
   const googlePlayUrl = "https://play.google.com/store/apps/details?id=com.freshdevotionals.app";
   const appStoreUrl = "https://apps.apple.com/app/id6742385194"; // Official iOS App Store URL
 
@@ -16,14 +18,20 @@ export default function StoreView() {
       {/* Main Glassmorphism Container */}
       <div className="w-full max-w-xl bg-slate-800/80 backdrop-blur-xl border border-slate-700/60 rounded-3xl p-8 sm:p-12 shadow-2xl space-y-8 relative z-10 text-center">
         
-        {/* App Logo & Badge */}
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/20 ring-4 ring-orange-500/20">
-            <BookOpen className="w-10 h-10 text-white" />
-          </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold uppercase tracking-wider">
-            <Star className="w-3.5 h-3.5 fill-orange-400 text-orange-400" />
-            <span>Daily Spiritual Growth</span>
+        {/* Platform Logo */}
+        <div className="flex flex-col items-center justify-center">
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-orange-600 via-amber-500 to-blue-600 rounded-3xl blur-md opacity-75 group-hover:opacity-100 transition duration-500"></div>
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/80 shadow-2xl flex items-center justify-center">
+              <img
+                src={settings?.app_logo_url || "/app-logo.png"}
+                alt="Fresh Devotionals Logo"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = "/app-logo.png";
+                }}
+              />
+            </div>
           </div>
         </div>
 
