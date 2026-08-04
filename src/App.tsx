@@ -13,6 +13,7 @@ import FeedbackView from "./ui/FeedbackView";
 import SettingsView from "./ui/SettingsView";
 import PrivacyPolicy from "./ui/PrivacyPolicy";
 import TermsOfUse from "./ui/TermsOfUse";
+import StoreView from "./ui/StoreView";
 import SidebarLayout from "./layout/SidebarLayout";
 import { ToastContainer } from "./components/CustomToast";
 
@@ -55,6 +56,7 @@ function App() {
         />
 
         {/* Public Utility Routes */}
+        <Route path="/store" element={<StoreView />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfUse />} />
 

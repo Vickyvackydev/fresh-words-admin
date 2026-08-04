@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Save, UploadCloud, Info, Globe, Mail } from "lucide-react";
 import toast from "../components/CustomToast";
 import { useAdminSettings, useUpdateAdminSettings } from "../api/hooks";
@@ -221,28 +221,15 @@ export default function SettingsView() {
                 />
               </div>
 
-              {/* Daily Quote Text */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Daily Quote Text</label>
-                <textarea
-                  rows={2}
-                  value={dailyQuoteText}
-                  onChange={(e) => setDailyQuoteText(e.target.value)}
-                  placeholder="Daily inspirational quote shown on home feed..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 text-sm text-slate-700 font-medium focus:outline-none focus:border-orange-500 resize-none leading-relaxed"
-                />
-              </div>
-
-              {/* Daily Quote Author */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Daily Quote Author</label>
-                <input
-                  type="text"
-                  value={dailyQuoteAuthor}
-                  onChange={(e) => setDailyQuoteAuthor(e.target.value)}
-                  placeholder="e.g. Billy Graham, Proverbs 3:5"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
-                />
+              {/* Automated Daily Quote Info */}
+              <div className="bg-orange-50/70 border border-orange-200/80 rounded-md p-4 space-y-1">
+                <div className="flex items-center gap-2 text-orange-800 font-bold text-xs">
+                  <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                  <span>Automated Daily Quotes Active</span>
+                </div>
+                <p className="text-xxs text-orange-700 leading-relaxed">
+                  Daily inspirational quotes are now automatically rotated every day for mobile app users. Manual typing is no longer required.
+                </p>
               </div>
             </div>
 
