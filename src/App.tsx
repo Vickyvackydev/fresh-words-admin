@@ -14,6 +14,7 @@ import SettingsView from "./ui/SettingsView";
 import PrivacyPolicy from "./ui/PrivacyPolicy";
 import TermsOfUse from "./ui/TermsOfUse";
 import StoreView from "./ui/StoreView";
+import SupportView from "./ui/SupportView";
 import SidebarLayout from "./layout/SidebarLayout";
 import { ToastContainer } from "./components/CustomToast";
 
@@ -59,6 +60,7 @@ function App() {
         <Route path="/store" element={<StoreView />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfUse />} />
+        <Route path="/support" element={<SupportView />} />
 
         {/* Authenticated Routes wrapped in SidebarLayout */}
         <Route
