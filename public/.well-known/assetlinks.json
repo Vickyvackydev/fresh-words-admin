@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.freshdevotionals.app",
+      "sha256_cert_fingerprints": [
+        "F0:33:42:AF:82:8A:33:D9:DC:60:DE:6D:F5:D5:86:DA:81:10:A7:EE:9E:C8:7A:16:16:22:99:6A:1E:53:74:82"
+      ]
+    }
+  }
+]

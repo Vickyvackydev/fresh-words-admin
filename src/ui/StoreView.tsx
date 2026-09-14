@@ -6,7 +6,7 @@ import { useAdminSettings } from "../api/hooks";
 export default function StoreView() {
   const { data: settings } = useAdminSettings();
   const googlePlayUrl = "https://play.google.com/store/apps/details?id=com.freshdevotionals.app";
-  const appStoreUrl = "https://apps.apple.com/app/id6742385194"; // Official iOS App Store URL
+  const appStoreUrl = "https://apps.apple.com/app/id6794951138"; // Official iOS App Store URL
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden font-sans">
