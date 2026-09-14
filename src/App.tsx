@@ -15,6 +15,7 @@ import PrivacyPolicy from "./ui/PrivacyPolicy";
 import TermsOfUse from "./ui/TermsOfUse";
 import StoreView from "./ui/StoreView";
 import SupportView from "./ui/SupportView";
+import PublicDevotionalView from "./ui/PublicDevotionalView";
 import SidebarLayout from "./layout/SidebarLayout";
 import { ToastContainer } from "./components/CustomToast";
 
@@ -57,6 +58,7 @@ function App() {
         />
 
         {/* Public Utility Routes */}
+        <Route path="/devotional/:id" element={<PublicDevotionalView />} />
         <Route path="/store" element={<StoreView />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfUse />} />
