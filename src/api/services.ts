@@ -62,6 +62,14 @@ export interface Settings {
 
   daily_quote_text?: string;
   daily_quote_author?: string;
+
+  latest_app_version?: string;
+  min_required_version?: string;
+  force_update?: boolean;
+  update_title?: string;
+  update_message?: string;
+  play_store_url?: string;
+  app_store_url?: string;
 }
 
 export interface Devotional {
@@ -101,6 +109,27 @@ export interface Package {
   file_name: string;
   uploaded_at: string;
   devotionals?: Devotional[];
+}
+
+export interface Hymn {
+  id: string;
+  number: number;
+  title: string;
+  chorus?: string;
+  verses: string | string[];
+  category?: string;
+  author?: string;
+  key?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface HymnsPaginated {
+  items: Hymn[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages?: number;
 }
 
 export const adminService = {
@@ -213,5 +242,49 @@ export const adminService = {
   ): Promise<any> => {
     const response = await api.put(`/admin/devotionals/${devotionalId}`, data);
     return response.data.data;
+  },
+
+  // Hymn management
+  getHymns: async (
+    page = 1,
+    limit = 50,
+    q = "",
+    category = ""
+  ): Promise<HymnsPaginated> => {
+    const response = await api.get("/admin/hymns", {
+      params: { page, limit, q, category },
+    });
+    return response.data.data;
+  },
+
+  createHymn: async (data: Partial<Hymn>): Promise<Hymn> => {
+    const response = await api.post("/admin/hymns", data);
+    return response.data.data;
+  },
+
+  updateHymn: async (id: string, data: Partial<Hymn>): Promise<Hymn> => {
+    const response = await api.put(`/admin/hymns/${id}`, data);
+    return response.data.data;
+  },
+
+  deleteHymn: async (id: string): Promise<any> => {
+    const response = await api.delete(`/admin/hymns/${id}`);
+    return response.data.data;
+  },
+
+  bulkUploadHymns: async (fileOrData: File | any[]): Promise<any> => {
+    if (fileOrData instanceof File) {
+      const formData = new FormData();
+      formData.append("file", fileOrData);
+      const response = await api.post("/admin/hymns/bulk", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      return response.data.data;
+    } else {
+      const response = await api.post("/admin/hymns/bulk", fileOrData);
+      return response.data.data;
+    }
   },
 };

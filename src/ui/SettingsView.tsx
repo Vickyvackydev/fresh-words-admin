@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { Save, UploadCloud, Info, Globe, Mail } from "lucide-react";
+import { Save, UploadCloud, Info, Globe, Mail, Smartphone, DownloadCloud } from "lucide-react";
 import toast from "../components/CustomToast";
 import { useAdminSettings, useUpdateAdminSettings } from "../api/hooks";
 
@@ -16,6 +15,20 @@ export default function SettingsView() {
   const [dailyQuoteText, setDailyQuoteText] = useState("");
   const [dailyQuoteAuthor, setDailyQuoteAuthor] = useState("");
 
+  const [latestAppVersion, setLatestAppVersion] = useState("1.0.3");
+  const [minRequiredVersion, setMinRequiredVersion] = useState("1.0.0");
+  const [forceUpdate, setForceUpdate] = useState(false);
+  const [updateTitle, setUpdateTitle] = useState("Update Available");
+  const [updateMessage, setUpdateMessage] = useState(
+    "A new version of Fresh Devotionals is available with improved translations, bible features, and performance enhancements."
+  );
+  const [playStoreUrl, setPlayStoreUrl] = useState(
+    "https://play.google.com/store/apps/details?id=com.freshdevotionals.app"
+  );
+  const [appStoreUrl, setAppStoreUrl] = useState(
+    "https://apps.apple.com/app/fresh-devotionals/id6742352824"
+  );
+
   useEffect(() => {
     if (settings) {
       setChurchName(settings.church_name || "");
@@ -26,6 +39,14 @@ export default function SettingsView() {
       setLogoPreview(settings.app_logo_url || "");
       setDailyQuoteText(settings.daily_quote_text || "");
       setDailyQuoteAuthor(settings.daily_quote_author || "");
+
+      if (settings.latest_app_version) setLatestAppVersion(settings.latest_app_version);
+      if (settings.min_required_version) setMinRequiredVersion(settings.min_required_version);
+      if (settings.force_update !== undefined) setForceUpdate(Boolean(settings.force_update));
+      if (settings.update_title) setUpdateTitle(settings.update_title);
+      if (settings.update_message) setUpdateMessage(settings.update_message);
+      if (settings.play_store_url) setPlayStoreUrl(settings.play_store_url);
+      if (settings.app_store_url) setAppStoreUrl(settings.app_store_url);
     }
   }, [settings]);
 
@@ -66,6 +87,13 @@ export default function SettingsView() {
         app_logo_url: logoPreview,
         daily_quote_text: dailyQuoteText,
         daily_quote_author: dailyQuoteAuthor,
+        latest_app_version: latestAppVersion,
+        min_required_version: minRequiredVersion,
+        force_update: forceUpdate,
+        update_title: updateTitle,
+        update_message: updateMessage,
+        play_store_url: playStoreUrl,
+        app_store_url: appStoreUrl,
       },
       {
         onSuccess: () => {
@@ -230,6 +258,92 @@ export default function SettingsView() {
                 <p className="text-xxs text-orange-700 leading-relaxed">
                   Daily inspirational quotes are now automatically rotated every day for mobile app users. Manual typing is no longer required.
                 </p>
+              </div>
+
+              {/* App Store Updates & Release Management */}
+              <div className="pt-4 border-t border-slate-150 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-orange-600" />
+                  <h4 className="font-bold text-slate-800 text-sm">App Updates & In-App Store Prompts</h4>
+                </div>
+                <p className="text-xxs text-slate-400">
+                  When you release a new build to the Google Play Store or Apple App Store, update the version numbers here to automatically prompt mobile users to update their app.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Latest App Version</label>
+                    <input
+                      type="text"
+                      value={latestAppVersion}
+                      onChange={(e) => setLatestAppVersion(e.target.value)}
+                      placeholder="e.g. 1.0.3"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-700 font-mono focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Min Required Version</label>
+                    <input
+                      type="text"
+                      value={minRequiredVersion}
+                      onChange={(e) => setMinRequiredVersion(e.target.value)}
+                      placeholder="e.g. 1.0.0"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-700 font-mono focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Force update toggle */}
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="forceUpdateToggle"
+                    checked={forceUpdate}
+                    onChange={(e) => setForceUpdate(e.target.checked)}
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
+                  />
+                  <label htmlFor="forceUpdateToggle" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                    Mandatory Force Update (prevents users on older versions from proceeding until updated)
+                  </label>
+                </div>
+
+                {/* Update Message */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Release Highlight Message</label>
+                  <textarea
+                    rows={2}
+                    value={updateMessage}
+                    onChange={(e) => setUpdateMessage(e.target.value)}
+                    placeholder="What's new in this release..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-700 focus:outline-none focus:border-orange-500 resize-none leading-relaxed"
+                  />
+                </div>
+
+                {/* Store Links */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Google Play Store URL</label>
+                    <input
+                      type="url"
+                      value={playStoreUrl}
+                      onChange={(e) => setPlayStoreUrl(e.target.value)}
+                      placeholder="https://play.google.com/store/apps/details?id=..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-700 font-mono focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Apple App Store URL</label>
+                    <input
+                      type="url"
+                      value={appStoreUrl}
+                      onChange={(e) => setAppStoreUrl(e.target.value)}
+                      placeholder="https://apps.apple.com/app/..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-700 font-mono focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -144,3 +144,52 @@ export function useUpdateDevotional() {
     },
   });
 }
+
+// Hymn hooks
+export function useHymnsList(page = 1, limit = 50, q = "", category = "") {
+  return useQuery({
+    queryKey: ["admin", "hymns", page, limit, q, category],
+    queryFn: () => adminService.getHymns(page, limit, q, category),
+  });
+}
+
+export function useCreateHymn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => adminService.createHymn(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
+    },
+  });
+}
+
+export function useUpdateHymn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => adminService.updateHymn(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
+    },
+  });
+}
+
+export function useDeleteHymn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminService.deleteHymn(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
+    },
+  });
+}
+
+export function useBulkUploadHymns() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fileOrData: File | any[]) => adminService.bulkUploadHymns(fileOrData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
+    },
+  });
+}
+

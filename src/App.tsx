@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import Login from "./ui/Login";
 import Dashboard from "./ui/Dashboard";
 import Devotions from "./ui/Devotions";
+import HymnsView from "./ui/HymnsView";
 import NotificationsView from "./ui/NotificationsView";
 import FeedbackView from "./ui/FeedbackView";
 import SettingsView from "./ui/SettingsView";
@@ -91,6 +92,21 @@ function App() {
                   categoryFilter={selectedCategoryFilter}
                   setCategoryFilter={setSelectedCategoryFilter}
                 />
+              </SidebarLayout>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        <Route
+          path="/hymns"
+          element={
+            isAuthenticated ? (
+              <SidebarLayout
+                setSelectedCategoryFilter={handleCategorySelection}
+              >
+                <HymnsView />
               </SidebarLayout>
             ) : (
               <Navigate to="/login" replace />

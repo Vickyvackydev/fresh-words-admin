@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   User,
+  Music,
 } from "lucide-react";
 import { reset, selectUser } from "../state/slices/authReducer";
 import { useAdminSettings, useDashboardStats } from "../api/hooks";
@@ -81,6 +82,11 @@ export default function SidebarLayout({
       path: "/devotions",
       icon: BookOpen,
       isExpandable: true,
+    },
+    {
+      name: "Hymns",
+      path: "/hymns",
+      icon: Music,
     },
     {
       name: "Devotional Settings",
