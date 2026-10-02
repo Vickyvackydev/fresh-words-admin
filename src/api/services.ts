@@ -10,6 +10,7 @@ export interface DashboardStats {
   unread_feedback: number;
   published_packages: number;
   total_devotionals: number;
+  total_hymns?: number;
   db_storage_usage: string;
   active_packages?: any[];
   total_active_reads?: number;
@@ -247,7 +248,7 @@ export const adminService = {
   // Hymn management
   getHymns: async (
     page = 1,
-    limit = 50,
+    limit = 1000,
     q = "",
     category = ""
   ): Promise<HymnsPaginated> => {

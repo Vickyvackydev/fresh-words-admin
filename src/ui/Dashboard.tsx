@@ -149,7 +149,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Strip */}
-        <div className="grid grid-cols-3 gap-6 py-2 border-b border-slate-100">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-2 border-b border-slate-100">
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
               Total Active Reads
@@ -191,6 +191,17 @@ export default function Dashboard() {
               {stats?.published_packages
                 ? `${stats.published_packages} active books`
                 : "0 active books"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              Total Hymns
+            </span>
+            <span className="text-xl font-extrabold text-slate-800 mt-1 block">
+              {stats?.total_hymns ?? 0}
+            </span>
+            <span className="text-[10px] text-emerald-600 font-semibold block mt-0.5">
+              active hymns in library
             </span>
           </div>
         </div>

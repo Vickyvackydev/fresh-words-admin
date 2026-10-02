@@ -57,7 +57,7 @@ function getVersesArray(verses: string | string[] | undefined): string[] {
 
 export default function HymnsView() {
   // Queries & Mutations
-  const { data, isLoading, isFetching, refetch } = useHymnsList();
+  const { data, isLoading, isFetching, refetch } = useHymnsList(1, 1000);
   const hymns: Hymn[] = useMemo(() => data?.items || [], [data]);
 
   const createHymnMutation = useCreateHymn();
@@ -294,7 +294,12 @@ export default function HymnsView() {
       {/* Hymn Heading & Tabs (Exact Devotions Styling) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5 w-full">
         <div className="space-y-1">
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hymn Library</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hymn Library</h1>
+            <span className="text-xs bg-orange-100 text-orange-700 font-bold px-2.5 py-0.5 rounded-full">
+              {data?.total || hymns.length} Hymns
+            </span>
+          </div>
           <p className="text-xs text-slate-500">
             Upload hymnal documents, inspect hymns, and manage church hymnal entries
           </p>
@@ -503,7 +508,7 @@ export default function HymnsView() {
                     <strong className="font-semibold">
                       {Math.min(startIndex + entriesPerPage, filteredHymns.length)}
                     </strong>{" "}
-                    of <strong className="font-semibold">{filteredHymns.length}</strong> hymns
+                    of <strong className="font-semibold">{data?.total || filteredHymns.length}</strong> hymns
                   </span>
 
                   <div className="flex items-center gap-2">

@@ -146,7 +146,7 @@ export function useUpdateDevotional() {
 }
 
 // Hymn hooks
-export function useHymnsList(page = 1, limit = 50, q = "", category = "") {
+export function useHymnsList(page = 1, limit = 1000, q = "", category = "") {
   return useQuery({
     queryKey: ["admin", "hymns", page, limit, q, category],
     queryFn: () => adminService.getHymns(page, limit, q, category),
