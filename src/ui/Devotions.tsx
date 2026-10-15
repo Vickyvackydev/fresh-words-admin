@@ -17,7 +17,16 @@ import {
   Loader2
 } from "lucide-react";
 import toast from "../components/CustomToast";
-import { usePackageHistory, useUploadPackage, usePublishPackage, useRollbackPackage, useDeletePackage, useUpdateDevotional } from "../api/hooks";
+import { 
+  usePackageHistory, 
+  useUploadPackage, 
+  usePublishPackage, 
+  useRollbackPackage, 
+  useDeletePackage, 
+  useUpdateDevotional,
+  useCreateDevotional,
+  useDeleteDevotional
+} from "../api/hooks";
 import { Package, Devotional as APIDevotional, adminService } from "../api/services";
 import moment from "moment";
 
@@ -32,6 +41,8 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   const rollbackPackageMutation = useRollbackPackage();
   const deletePackageMutation = useDeletePackage();
   const updateDevotionalMutation = useUpdateDevotional();
+  const createDevotionalMutation = useCreateDevotional();
+  const deleteDevotionalMutation = useDeleteDevotional();
 
   // Tabs: 'browse' | 'upload' | 'history'
   const [activeTab, setActiveTab] = useState<"browse" | "upload" | "history">("browse");
@@ -84,6 +95,21 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
   const [isLoadingYoDevo, setIsLoadingYoDevo] = useState(false);
   const [isGeneratingAIDraft, setIsGeneratingAIDraft] = useState(false);
   const [isSavingYoDevo, setIsSavingYoDevo] = useState(false);
+
+  // Single Devotion Creation States
+  const [isCreatingDevotional, setIsCreatingDevotional] = useState(false);
+  const [createCategory, setCreateCategory] = useState<
+    "Daily Deliverance" | "Holiness" | "Prayer" | "Yearly Devotional"
+  >("Daily Deliverance");
+  const [createDay, setCreateDay] = useState<string>("1");
+  const [createTitle, setCreateTitle] = useState("");
+  const [createScriptureRef, setCreateScriptureRef] = useState("");
+  const [createScriptureQuote, setCreateScriptureQuote] = useState("");
+  const [createBody, setCreateBody] = useState("");
+  const [createPrayer, setCreatePrayer] = useState("");
+  const [createReflection, setCreateReflection] = useState("");
+  const [createActionPoints, setCreateActionPoints] = useState("");
+  const [deletingDevotional, setDeletingDevotional] = useState<{ id: string; day: number; title: string } | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -430,6 +456,92 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
     });
   };
 
+  const handleStartCreateDevotional = () => {
+    setCreateCategory(selectedCategory);
+    
+    // Auto-calculate the next day number or first missing day
+    const existingDays = new Set(allFilteredEntries.map(e => e.entry.default_day));
+    let nextDay = 1;
+    for (let d = 1; d <= 366; d++) {
+      if (!existingDays.has(d)) {
+        nextDay = d;
+        break;
+      }
+    }
+    if (existingDays.size > 0 && nextDay === 1 && existingDays.has(1)) {
+      const maxDay = Math.max(...allFilteredEntries.map(e => e.entry.default_day));
+      nextDay = maxDay + 1;
+    }
+    
+    setCreateDay(String(nextDay));
+    setCreateTitle("");
+    setCreateScriptureRef("");
+    setCreateScriptureQuote("");
+    setCreateBody("");
+    setCreatePrayer("");
+    setCreateReflection("");
+    setCreateActionPoints("");
+    setIsCreatingDevotional(true);
+  };
+
+  const handleSaveCreateDevotional = () => {
+    if (!createTitle.trim()) {
+      toast.error("Please enter a devotion title.");
+      return;
+    }
+    if (!createBody.trim()) {
+      toast.error("Please enter devotion content / body.");
+      return;
+    }
+    const parsedDay = parseInt(createDay, 10);
+    if (isNaN(parsedDay) || parsedDay < 1 || parsedDay > 366) {
+      toast.error("Day must be a valid number between 1 and 366.");
+      return;
+    }
+
+    createDevotionalMutation.mutate(
+      {
+        category: createCategory,
+        default_day: parsedDay,
+        title: createTitle.trim(),
+        scripture_reference: createScriptureRef.trim(),
+        scripture_quote: createScriptureQuote.trim(),
+        body: createBody.trim(),
+        prayer: createPrayer.trim(),
+        reflection: createReflection.trim(),
+        action_points: createActionPoints.trim(),
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Day ${parsedDay} added successfully to ${createCategory}!`);
+          setIsCreatingDevotional(false);
+          refetchHistory();
+        },
+        onError: (err: any) => {
+          toast.error("Failed to add devotional: " + (err.response?.data?.error || err.message || "Unknown error"));
+        },
+      }
+    );
+  };
+
+  const handleConfirmDeleteDevotional = () => {
+    if (!deletingDevotional) return;
+    const { id, day } = deletingDevotional;
+    deleteDevotionalMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success(`Day ${day} deleted successfully.`);
+        if (previewDevotional && previewDevotional.id === id) {
+          setPreviewDevotional(null);
+        }
+        setDeletingDevotional(null);
+        refetchHistory();
+      },
+      onError: (err: any) => {
+        toast.error("Failed to delete devotional: " + (err.response?.data?.error || err.message || "Unknown error"));
+      }
+    });
+  };
+
   return (
     <div className="space-y-6 font-sans">
       
@@ -440,40 +552,51 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
           <p className="text-xs text-slate-500">Upload new devotion documents, inspect days, and manage published packages</p>
         </div>
         
-        {/* Navigation Tabs */}
-        <div className="flex bg-slate-200/60 p-1.5 rounded-md border border-slate-200 md:self-end">
+        {/* Header Action Buttons & Navigation Tabs */}
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Navigation Tabs */}
+          <div className="flex bg-slate-200/60 p-1.5 rounded-md border border-slate-200 shrink-0">
+            <button
+              onClick={() => setActiveTab("browse")}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === "browse" 
+                  ? "bg-white text-slate-800 shadow-sm" 
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Browse Devotions</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("upload")}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === "upload" 
+                  ? "bg-white text-slate-800 shadow-sm" 
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>Upload Package</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === "history" 
+                  ? "bg-white text-slate-800 shadow-sm" 
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Package History</span>
+            </button>
+          </div>
+
           <button
-            onClick={() => setActiveTab("browse")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer ${
-              activeTab === "browse" 
-                ? "bg-white text-slate-800 shadow-sm" 
-                : "text-slate-500 hover:text-slate-800"
-            }`}
+            onClick={handleStartCreateDevotional}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-xs cursor-pointer whitespace-nowrap shrink-0"
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Browse Devotions</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("upload")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer ${
-              activeTab === "upload" 
-                ? "bg-white text-slate-800 shadow-sm" 
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <UploadCloud className="w-3.5 h-3.5" />
-            <span>Upload Package</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer ${
-              activeTab === "history" 
-                ? "bg-white text-slate-800 shadow-sm" 
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            <span>Package History</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Devotion</span>
           </button>
         </div>
       </div>
@@ -623,7 +746,14 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                           <Clock className="w-3 h-3" />
                           <span>{Math.ceil((entry.body?.length || 1000) / 800)} min read</span>
                         </div>
-                        <div className="flex gap-3">
+                        <div className="flex gap-2.5 items-center">
+                          <button
+                            onClick={() => setDeletingDevotional({ id: entry.id, day: entry.default_day, title: entry.title })}
+                            className="p-1 text-slate-350 hover:text-red-600 transition-colors cursor-pointer"
+                            title="Delete this devotion"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => handleStartEdit(entry)}
                             className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
@@ -1205,22 +1335,37 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-50 bg-slate-50 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-slate-50 bg-slate-50 flex justify-between items-center">
               <button
-                onClick={() => {
-                  setPreviewDevotional(null);
-                  handleStartEdit(previewDevotional);
-                }}
-                className="px-5 py-2 border border-slate-205 text-slate-700 font-semibold text-xs tracking-wide rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                type="button"
+                onClick={() => setDeletingDevotional({
+                  id: previewDevotional.id,
+                  day: previewDevotional.default_day,
+                  title: previewDevotional.title,
+                })}
+                className="px-3.5 py-2 border border-red-200 text-red-600 hover:bg-red-50 font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                Edit
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
               </button>
-              <button
-                onClick={() => setPreviewDevotional(null)}
-                className="px-5 py-2 bg-slate-900 text-white font-semibold text-xs tracking-wide rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                Close Preview
-              </button>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => {
+                    const toEdit = previewDevotional;
+                    setPreviewDevotional(null);
+                    handleStartEdit(toEdit);
+                  }}
+                  className="px-5 py-2 border border-slate-205 text-slate-700 font-semibold text-xs tracking-wide rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => setPreviewDevotional(null)}
+                  className="px-5 py-2 bg-slate-900 text-white font-semibold text-xs tracking-wide rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Close Preview
+                </button>
+              </div>
             </div>
 
           </div>
@@ -1250,7 +1395,7 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
               </button>
             </div>
 
-            {/* Sub-tabs for Language (English vs Yoruba) */}
+            {/* Sub-tabs for Language (English vs Yoruba) - commented out per requirement
             <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2.5 gap-2">
               <button
                 type="button"
@@ -1277,6 +1422,7 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 <span>Yoruba Version (Èdè Yorùbá)</span>
               </button>
             </div>
+            */}
 
             {/* Scrollable Form Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin text-slate-700 text-sm">
@@ -1578,6 +1724,226 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
                 {deletePackageMutation.isPending ? "Deleting..." : "Permanently Delete"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: DELETE SINGLE DEVOTION CONFIRMATION
+          ======================================================== */}
+      {deletingDevotional && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 font-sans">
+          <div className="bg-white border border-slate-100 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4 font-sans text-left">
+            <div className="p-3 bg-red-50 text-red-600 rounded-xl w-fit">
+              <Trash2 className="w-6 h-6 animate-pulse" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-slate-800 text-lg font-sans">Delete Devotion?</h3>
+              <p className="text-xs text-slate-500 leading-normal font-sans">
+                Are you sure you want to permanently delete <strong>Day {deletingDevotional.day}</strong>
+                {deletingDevotional.title ? <span> &mdash; <em>"{deletingDevotional.title}"</em></span> : null}?
+              </p>
+            </div>
+
+            <div className="bg-red-50/50 border border-red-100 rounded-xl p-3.5 flex gap-2 text-red-800 text-xs leading-normal font-sans">
+              <AlertCircle className="w-4.5 h-4.5 text-red-600 flex-shrink-0 mt-0.5" />
+              <span>
+                <strong>Warning:</strong> This will permanently delete this devotion entry from the database. This action cannot be undone.
+              </span>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-2 font-sans">
+              <button
+                type="button"
+                onClick={() => setDeletingDevotional(null)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-lg text-xs font-semibold tracking-wide cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteDevotional}
+                disabled={deleteDevotionalMutation.isPending}
+                className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold tracking-wide cursor-pointer shadow-md shadow-red-600/10 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {deleteDevotionalMutation.isPending ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL 4: ADD SINGLE DEVOTION MODAL
+          ======================================================== */}
+      {isCreatingDevotional && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 font-sans">
+          <div className="bg-white border border-slate-100 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-left">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+              <div className="space-y-0.5">
+                <span className="bg-orange-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  New Devotional
+                </span>
+                <h3 className="font-extrabold text-md mt-1 leading-snug">Add Devotion</h3>
+              </div>
+              <button
+                onClick={() => setIsCreatingDevotional(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin text-slate-700 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Category Selection */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Category</label>
+                  <select
+                    value={createCategory}
+                    onChange={(e) => setCreateCategory(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="Daily Deliverance">Daily Deliverance</option>
+                    <option value="Holiness">Holiness Devotional</option>
+                    <option value="Prayer">Prayer Devotional</option>
+                    <option value="Yearly Devotional">Yearly Devotional</option>
+                  </select>
+                </div>
+
+                {/* Day Number */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Day Number (1 - 366) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={366}
+                    placeholder="e.g. 291"
+                    value={createDay}
+                    onChange={(e) => setCreateDay(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* Title */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Walking in Divine Favor"
+                  value={createTitle}
+                  onChange={(e) => setCreateTitle(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Scripture Reference */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Scripture Reference</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Genesis 1:1-3, Hebrews 11:1"
+                  value={createScriptureRef}
+                  onChange={(e) => setCreateScriptureRef(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Scripture Quote */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Scripture Quote</label>
+                <textarea
+                  rows={2}
+                  placeholder="Quote the scripture verse here..."
+                  value={createScriptureQuote}
+                  onChange={(e) => setCreateScriptureQuote(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500 resize-none"
+                />
+              </div>
+
+              {/* Devotional Body / Message */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Devotional Body / Message *</label>
+                <textarea
+                  rows={6}
+                  placeholder="Enter the main devotional teaching paragraphs..."
+                  value={createBody}
+                  onChange={(e) => setCreateBody(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Prayer */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Prayer</label>
+                <textarea
+                  rows={2}
+                  placeholder="Closing prayer..."
+                  value={createPrayer}
+                  onChange={(e) => setCreatePrayer(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500 resize-none"
+                />
+              </div>
+
+              {/* Reflection */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Reflection</label>
+                <textarea
+                  rows={2}
+                  placeholder="Daily reflection or meditation point..."
+                  value={createReflection}
+                  onChange={(e) => setCreateReflection(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500 resize-none"
+                />
+              </div>
+
+              {/* Action Points */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Action Points</label>
+                <textarea
+                  rows={2}
+                  placeholder="Action points (one per line or comma-separated)..."
+                  value={createActionPoints}
+                  onChange={(e) => setCreateActionPoints(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 font-medium focus:outline-none focus:border-orange-500 resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 items-center">
+              <button
+                type="button"
+                onClick={() => setIsCreatingDevotional(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-100 font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCreateDevotional}
+                disabled={createDevotionalMutation.isPending}
+                className="px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold text-xs tracking-wide rounded-lg shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                {createDevotionalMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving Devotion...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Save Devotion</span>
+                  </>
+                )}
+              </button>
+            </div>
+
           </div>
         </div>
       )}

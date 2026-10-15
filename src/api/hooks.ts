@@ -145,6 +145,37 @@ export function useUpdateDevotional() {
   });
 }
 
+export function useCreateDevotional() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      category: string;
+      package_id?: string;
+      default_day: number;
+      title: string;
+      scripture_reference: string;
+      scripture_quote: string;
+      body: string;
+      prayer?: string;
+      reflection?: string;
+      action_points?: string;
+    }) => adminService.createDevotional(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "packages"] });
+    },
+  });
+}
+
+export function useDeleteDevotional() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (devotionalId: string) => adminService.deleteDevotional(devotionalId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "packages"] });
+    },
+  });
+}
+
 // Hymn hooks
 export function useHymnsList(page = 1, limit = 1000, q = "", category = "", book = "english") {
   return useQuery({

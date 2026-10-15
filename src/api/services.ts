@@ -245,6 +245,27 @@ export const adminService = {
     return response.data.data;
   },
 
+  createDevotional: async (data: {
+    category: string;
+    package_id?: string;
+    default_day: number;
+    title: string;
+    scripture_reference: string;
+    scripture_quote: string;
+    body: string;
+    prayer?: string;
+    reflection?: string;
+    action_points?: string;
+  }): Promise<any> => {
+    const response = await api.post("/admin/devotionals", data);
+    return response.data.data;
+  },
+
+  deleteDevotional: async (devotionalId: string): Promise<any> => {
+    const response = await api.delete(`/admin/devotionals/${devotionalId}`);
+    return response.data.data;
+  },
+
   // Hymn management
   getHymns: async (
     page = 1,
