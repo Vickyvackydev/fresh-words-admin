@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import toast from "../components/CustomToast";
 import { usePackageHistory, useUploadPackage, usePublishPackage, useRollbackPackage, useDeletePackage, useUpdateDevotional } from "../api/hooks";
-import { Package, Devotional as APIDevotional } from "../api/services";
+import { Package, Devotional as APIDevotional, adminService } from "../api/services";
 import moment from "moment";
 
 interface DevotionsProps {
@@ -66,12 +66,24 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
 
   // Edit Modal States
   const [editingDevotional, setEditingDevotional] = useState<APIDevotional | null>(null);
+  const [devoLangTab, setDevoLangTab] = useState<"en" | "yo">("en");
   const [editTitle, setEditTitle] = useState("");
   const [editScriptureReference, setEditScriptureReference] = useState("");
   const [editScriptureQuote, setEditScriptureQuote] = useState("");
   const [editBody, setEditBody] = useState("");
   const [editPrayer, setEditPrayer] = useState("");
   const [editReflection, setEditReflection] = useState("");
+
+  // Yoruba Translation States for Devotional
+  const [yoDevoTitle, setYoDevoTitle] = useState("");
+  const [yoDevoScriptureRef, setYoDevoScriptureRef] = useState("");
+  const [yoDevoScriptureQuote, setYoDevoScriptureQuote] = useState("");
+  const [yoDevoBody, setYoDevoBody] = useState("");
+  const [yoDevoPrayer, setYoDevoPrayer] = useState("");
+  const [yoDevoReflection, setYoDevoReflection] = useState("");
+  const [isLoadingYoDevo, setIsLoadingYoDevo] = useState(false);
+  const [isGeneratingAIDraft, setIsGeneratingAIDraft] = useState(false);
+  const [isSavingYoDevo, setIsSavingYoDevo] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -307,12 +319,79 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
 
   const handleStartEdit = (devo: APIDevotional) => {
     setEditingDevotional(devo);
+    setDevoLangTab("en");
     setEditTitle(devo.title);
     setEditScriptureReference(devo.scripture_reference);
     setEditScriptureQuote(devo.scripture_quote);
     setEditBody(devo.body);
     setEditPrayer(devo.prayer || "");
     setEditReflection(devo.reflection || "");
+
+    // Fetch verified Yoruba devotional if already saved
+    setIsLoadingYoDevo(true);
+    adminService
+      .getDevotionalTranslation(devo.id, "yo")
+      .then((trans) => {
+        setYoDevoTitle(trans.title || "");
+        setYoDevoScriptureRef(trans.scripture_reference || "");
+        setYoDevoScriptureQuote(trans.scripture_quote || "");
+        setYoDevoBody(trans.body || "");
+        setYoDevoPrayer(trans.prayer || "");
+        setYoDevoReflection(trans.reflection || "");
+      })
+      .catch(() => {
+        setYoDevoTitle("");
+        setYoDevoScriptureRef("");
+        setYoDevoScriptureQuote("");
+        setYoDevoBody("");
+        setYoDevoPrayer("");
+        setYoDevoReflection("");
+      })
+      .finally(() => setIsLoadingYoDevo(false));
+  };
+
+  const handleGenerateAIDraft = async () => {
+    if (!editingDevotional) return;
+    setIsGeneratingAIDraft(true);
+    try {
+      const draft = await adminService.generateDevotionalAIDraft(editingDevotional.id, "yo");
+      if (draft.title) setYoDevoTitle(draft.title);
+      if (draft.scripture_reference) setYoDevoScriptureRef(draft.scripture_reference);
+      if (draft.scripture_quote) setYoDevoScriptureQuote(draft.scripture_quote);
+      if (draft.body) setYoDevoBody(draft.body);
+      if (draft.prayer) setYoDevoPrayer(draft.prayer);
+      if (draft.reflection) setYoDevoReflection(draft.reflection);
+      toast.success("AI Yoruba draft generated! Review tone marks and wording before saving.");
+    } catch (err: any) {
+      toast.error("Failed to generate AI draft: " + (err.message || "Unknown error"));
+    } finally {
+      setIsGeneratingAIDraft(false);
+    }
+  };
+
+  const handleSaveYorubaDevotional = async () => {
+    if (!editingDevotional) return;
+    if (!yoDevoTitle.trim()) {
+      toast.error("Please enter a Yoruba title (*Àkọ́lé*).");
+      return;
+    }
+    setIsSavingYoDevo(true);
+    try {
+      await adminService.saveDevotionalTranslation(editingDevotional.id, {
+        language: "yo",
+        title: yoDevoTitle.trim(),
+        scripture_reference: yoDevoScriptureRef.trim(),
+        scripture_quote: yoDevoScriptureQuote.trim(),
+        body: yoDevoBody.trim(),
+        prayer: yoDevoPrayer.trim(),
+        reflection: yoDevoReflection.trim(),
+      });
+      toast.success("Verified Yoruba translation saved successfully!");
+    } catch (err: any) {
+      toast.error("Failed to save translation: " + (err.message || "Unknown error"));
+    } finally {
+      setIsSavingYoDevo(false);
+    }
   };
 
   const handleSaveEdit = () => {
@@ -1171,68 +1250,219 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
               </button>
             </div>
 
+            {/* Sub-tabs for Language (English vs Yoruba) */}
+            <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2.5 gap-2">
+              <button
+                type="button"
+                onClick={() => setDevoLangTab("en")}
+                className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                  devoLangTab === "en"
+                    ? "border-orange-600 text-orange-700 bg-white rounded-t-lg border-t border-x border-slate-200"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <span>🇬🇧</span>
+                <span>English Original</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDevoLangTab("yo")}
+                className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                  devoLangTab === "yo"
+                    ? "border-orange-600 text-orange-700 bg-white rounded-t-lg border-t border-x border-slate-200"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <span>🇳🇬</span>
+                <span>Yoruba Version (Èdè Yorùbá)</span>
+              </button>
+            </div>
+
             {/* Scrollable Form Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin text-slate-700 text-sm">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Title</label>
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
-                />
-              </div>
+              {devoLangTab === "yo" ? (
+                /* Yoruba Devotional Form */
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 flex gap-2 text-emerald-800 text-xs leading-normal">
+                    <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Verified Yoruba Translation:</strong> Editors can review and correct tone marks (*àmì ohùn*) and theological terms. Once saved, this official version is cached and served directly to app users reading in Yoruba.
+                    </span>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5 col-span-2 md:col-span-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Scripture Reference</label>
-                  <input
-                    type="text"
-                    value={editScriptureReference}
-                    onChange={(e) => setEditScriptureReference(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
-                  />
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Yoruba Fields (*Èdè Yorùbá*)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleGenerateAIDraft}
+                      disabled={isGeneratingAIDraft}
+                      className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                      title="Generate initial draft with Gemini AI for human review"
+                    >
+                      {isGeneratingAIDraft ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-600" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-orange-600" />
+                      )}
+                      <span>{isGeneratingAIDraft ? "Translating Draft..." : "Generate AI Draft"}</span>
+                    </button>
+                  </div>
+
+                  {isLoadingYoDevo ? (
+                    <div className="py-10 flex flex-col items-center justify-center gap-2 text-slate-400">
+                      <Loader2 className="w-6 h-6 animate-spin text-orange-600" />
+                      <span className="text-xs">Loading existing translation...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                          Yoruba Title (*Àkọ́lé*) *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Ìrìn Nínú Ìgbàgbọ́"
+                          value={yoDevoTitle}
+                          onChange={(e) => setYoDevoTitle(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5 col-span-2 md:col-span-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                            Scripture Reference (*Ẹsẹ Ìwé Mímọ́*)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Jòhánù 3:16"
+                            value={yoDevoScriptureRef}
+                            onChange={(e) => setYoDevoScriptureRef(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                          />
+                        </div>
+                        <div className="space-y-1.5 col-span-2 md:col-span-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                            Scripture Quote (*Ọ̀rọ̀ Ìwé Mímọ́*)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ọ̀rọ̀ Ìwé Mímọ́ láti Bíbélì Mímọ́..."
+                            value={yoDevoScriptureQuote}
+                            onChange={(e) => setYoDevoScriptureQuote(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                          Message Body (*Ẹ̀kọ́ Òní*)
+                        </label>
+                        <textarea
+                          rows={8}
+                          placeholder="Ẹ̀kọ́ ọ̀rọ̀ Ọlọ́run fún òní..."
+                          value={yoDevoBody}
+                          onChange={(e) => setYoDevoBody(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500 leading-relaxed"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                          Prayer Point (*Àdúrà*)
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="Àdúrà òní..."
+                          value={yoDevoPrayer}
+                          onChange={(e) => setYoDevoPrayer(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                          Reflection (*Àṣàrò*)
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="Àṣàrò kíkúndùn..."
+                          value={yoDevoReflection}
+                          onChange={(e) => setYoDevoReflection(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
-                <div className="space-y-1.5 col-span-2 md:col-span-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Scripture Quote</label>
-                  <input
-                    type="text"
-                    value={editScriptureQuote}
-                    onChange={(e) => setEditScriptureQuote(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
-                  />
-                </div>
-              </div>
+              ) : (
+                /* English Devotional Form */
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Title</label>
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Message Body</label>
-                <textarea
-                  rows={8}
-                  value={editBody}
-                  onChange={(e) => setEditBody(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500 leading-relaxed"
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5 col-span-2 md:col-span-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Scripture Reference</label>
+                      <input
+                        type="text"
+                        value={editScriptureReference}
+                        onChange={(e) => setEditScriptureReference(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5 col-span-2 md:col-span-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Scripture Quote</label>
+                      <input
+                        type="text"
+                        value={editScriptureQuote}
+                        onChange={(e) => setEditScriptureQuote(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-semibold focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+                  </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Prayer Point</label>
-                <textarea
-                  rows={2}
-                  value={editPrayer}
-                  onChange={(e) => setEditPrayer(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500"
-                />
-              </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Message Body</label>
+                    <textarea
+                      rows={8}
+                      value={editBody}
+                      onChange={(e) => setEditBody(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500 leading-relaxed"
+                    />
+                  </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Reflection</label>
-                <textarea
-                  rows={2}
-                  value={editReflection}
-                  onChange={(e) => setEditReflection(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500"
-                />
-              </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Prayer Point</label>
+                    <textarea
+                      rows={2}
+                      value={editPrayer}
+                      onChange={(e) => setEditPrayer(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Reflection</label>
+                    <textarea
+                      rows={2}
+                      value={editReflection}
+                      onChange={(e) => setEditReflection(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-normal focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -1243,13 +1473,26 @@ export default function Devotions({ categoryFilter, setCategoryFilter }: Devotio
               >
                 Cancel
               </button>
-              <button
-                onClick={handleSaveEdit}
-                disabled={updateDevotionalMutation.isPending}
-                className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer shadow-md shadow-orange-600/10 disabled:opacity-50"
-              >
-                {updateDevotionalMutation.isPending ? "Saving..." : "Save Changes"}
-              </button>
+
+              {devoLangTab === "yo" ? (
+                <button
+                  type="button"
+                  onClick={handleSaveYorubaDevotional}
+                  disabled={isSavingYoDevo}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer shadow-md shadow-emerald-600/10 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSavingYoDevo && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Save Yoruba Version</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={updateDevotionalMutation.isPending}
+                  className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer shadow-md shadow-orange-600/10 disabled:opacity-50"
+                >
+                  {updateDevotionalMutation.isPending ? "Saving..." : "Save Changes"}
+                </button>
+              )}
             </div>
 
           </div>

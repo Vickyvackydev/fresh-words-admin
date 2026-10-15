@@ -1,27 +1,27 @@
 import { useState, useMemo } from "react";
-import { 
-  Search, 
-  UploadCloud, 
-  CheckCircle2, 
-  AlertCircle, 
-  ChevronRight, 
+import {
+  Search,
+  UploadCloud,
+  CheckCircle2,
+  AlertCircle,
+  ChevronRight,
   ChevronLeft,
-  X, 
-  Trash2, 
-  BookOpen, 
-  Plus, 
+  X,
+  Trash2,
+  BookOpen,
+  Plus,
   Loader2,
-  Music
+  Music,
 } from "lucide-react";
 import toast from "../components/CustomToast";
-import { 
-  useHymnsList, 
-  useCreateHymn, 
-  useUpdateHymn, 
-  useDeleteHymn, 
-  useBulkUploadHymns 
+import {
+  useHymnsList,
+  useCreateHymn,
+  useUpdateHymn,
+  useDeleteHymn,
+  useBulkUploadHymns,
 } from "../api/hooks";
-import { Hymn } from "../api/services";
+import { Hymn, adminService } from "../api/services";
 
 function formatKey(key: string | undefined): string {
   if (!key) return "";
@@ -37,12 +37,16 @@ function getVersesArray(verses: string | string[] | undefined): string[] {
   if (!verses || verses === "null") return [];
   let list: string[] = [];
   if (Array.isArray(verses)) {
-    list = verses.filter((v) => typeof v === "string" && v.trim() !== "" && v !== "null");
+    list = verses.filter(
+      (v) => typeof v === "string" && v.trim() !== "" && v !== "null",
+    );
   } else {
     try {
       const parsed = JSON.parse(verses);
       if (Array.isArray(parsed)) {
-        list = parsed.filter((v: any) => typeof v === "string" && v.trim() !== "" && v !== "null");
+        list = parsed.filter(
+          (v: any) => typeof v === "string" && v.trim() !== "" && v !== "null",
+        );
       } else if (verses !== "null" && verses !== '""') {
         list = [verses];
       }
@@ -56,8 +60,19 @@ function getVersesArray(verses: string | string[] | undefined): string[] {
 }
 
 export default function HymnsView() {
+  // Active Hymnal: 'english' | 'yoruba'
+  const [activeHymnal, setActiveHymnal] = useState<"english" | "yoruba">(
+    "english",
+  );
+
   // Queries & Mutations
-  const { data, isLoading, isFetching, refetch } = useHymnsList(1, 1000);
+  const { data, isLoading, isFetching, refetch } = useHymnsList(
+    1,
+    1000,
+    "",
+    "",
+    activeHymnal,
+  );
   const hymns: Hymn[] = useMemo(() => data?.items || [], [data]);
 
   const createHymnMutation = useCreateHymn();
@@ -81,6 +96,7 @@ export default function HymnsView() {
   // Edit / Create Modal States
   const [editingHymn, setEditingHymn] = useState<Hymn | null>(null);
   const [isCreatingHymn, setIsCreatingHymn] = useState(false);
+  const [modalLangTab, setModalLangTab] = useState<"en" | "yo">("en");
   const [formNumber, setFormNumber] = useState<number>(1);
   const [formTitle, setFormTitle] = useState("");
   const [formAuthor, setFormAuthor] = useState("");
@@ -88,11 +104,19 @@ export default function HymnsView() {
   const [formChorus, setFormChorus] = useState("");
   const [formVersesText, setFormVersesText] = useState("");
 
+  // Yoruba Translation States for Edit Modal
+  const [yoTitle, setYoTitle] = useState("");
+  const [yoChorus, setYoChorus] = useState("");
+  const [yoVersesText, setYoVersesText] = useState("");
+  const [isLoadingYo, setIsLoadingYo] = useState(false);
+  const [isSavingYo, setIsSavingYo] = useState(false);
+
   // Delete Confirm State
   const [deletingHymn, setDeletingHymn] = useState<Hymn | null>(null);
 
   // Upload Tab States
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadLang, setUploadLang] = useState<"en" | "yo">("en");
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadReport, setUploadReport] = useState<any>(null);
@@ -107,15 +131,26 @@ export default function HymnsView() {
       const matchesAuthor = hymn.author?.toLowerCase().includes(q);
       const matchesChorus = hymn.chorus?.toLowerCase().includes(q);
       const versesArr = getVersesArray(hymn.verses);
-      const matchesVerse = versesArr.some((v: string) => v.toLowerCase().includes(q));
-      return matchesNum || matchesTitle || matchesAuthor || matchesChorus || matchesVerse;
+      const matchesVerse = versesArr.some((v: string) =>
+        v.toLowerCase().includes(q),
+      );
+      return (
+        matchesNum ||
+        matchesTitle ||
+        matchesAuthor ||
+        matchesChorus ||
+        matchesVerse
+      );
     });
   }, [hymns, searchTerm]);
 
   // Paginated Entries
   const totalPages = Math.ceil(filteredHymns.length / entriesPerPage);
   const startIndex = (currentPage - 1) * entriesPerPage;
-  const paginatedEntries = filteredHymns.slice(startIndex, startIndex + entriesPerPage);
+  const paginatedEntries = filteredHymns.slice(
+    startIndex,
+    startIndex + entriesPerPage,
+  );
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -127,18 +162,80 @@ export default function HymnsView() {
   const handleStartEdit = (hymn: Hymn) => {
     setEditingHymn(hymn);
     setIsCreatingHymn(false);
+    setModalLangTab("en");
     setFormNumber(hymn.number);
     setFormTitle(hymn.title);
-    setFormAuthor(hymn.author || "");
+    setFormAuthor(
+      hymn.author || (activeHymnal === "yoruba" ? "Ìwé Orin Mímọ́" : ""),
+    );
     setFormKey(formatKey(hymn.key || ""));
     setFormChorus(hymn.chorus || "");
     const versesArr = getVersesArray(hymn.verses);
     setFormVersesText(versesArr.join("\n\n---\n\n"));
+
+    // Fetch verified Yoruba lyrics overlay only when editing English hymnal
+    if (activeHymnal === "english") {
+      setIsLoadingYo(true);
+      adminService
+        .getHymnTranslation(hymn.id, "yo")
+        .then((data) => {
+          setYoTitle(data.title || "");
+          setYoChorus(data.chorus || "");
+          setYoVersesText(
+            data.verses && data.verses.length > 0
+              ? data.verses.join("\n\n---\n\n")
+              : "",
+          );
+        })
+        .catch(() => {
+          setYoTitle("");
+          setYoChorus("");
+          setYoVersesText("");
+        })
+        .finally(() => setIsLoadingYo(false));
+    }
+  };
+
+  // Open Preview Modal
+  const handleOpenPreview = (hymn: Hymn) => {
+    setPreviewHymn(hymn);
+  };
+
+  // Save Yoruba Translation
+  const handleSaveYoruba = async () => {
+    if (!editingHymn) return;
+    if (!yoTitle.trim()) {
+      toast.error("Please enter a Yoruba title (*Àkọ́lé*).");
+      return;
+    }
+    setIsSavingYo(true);
+    try {
+      const rawStanzas = yoVersesText
+        .split(/\n\n---\n\n|\n\n\n+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      await adminService.saveHymnTranslation(editingHymn.id, {
+        language: "yo",
+        title: yoTitle.trim(),
+        chorus: yoChorus.trim(),
+        verses: rawStanzas,
+      });
+
+      toast.success(`Yoruba lyrics saved for Hymn #${editingHymn.number}!`);
+    } catch (err: any) {
+      toast.error(
+        "Failed to save Yoruba lyrics: " + (err.message || "Unknown error"),
+      );
+    } finally {
+      setIsSavingYo(false);
+    }
   };
 
   // Open Create Modal
   const handleStartCreate = () => {
-    const nextNum = hymns.length > 0 ? Math.max(...hymns.map((h: Hymn) => h.number)) + 1 : 1;
+    const nextNum =
+      hymns.length > 0 ? Math.max(...hymns.map((h: Hymn) => h.number)) + 1 : 1;
     setEditingHymn(null);
     setIsCreatingHymn(true);
     setFormNumber(nextNum);
@@ -171,22 +268,31 @@ export default function HymnsView() {
     };
 
     if (isCreatingHymn) {
-      createHymnMutation.mutate(payload, {
-        onSuccess: () => {
-          toast.success("Hymn created successfully!");
-          setIsCreatingHymn(false);
-          refetch();
+      createHymnMutation.mutate(
+        { data: payload, book: activeHymnal },
+        {
+          onSuccess: () => {
+            toast.success(
+              `${activeHymnal === "yoruba" ? "Yoruba" : "English"} Hymn created successfully!`,
+            );
+            setIsCreatingHymn(false);
+            refetch();
+          },
+          onError: (err: any) => {
+            toast.error(
+              "Failed to create hymn: " + (err.message || "Unknown error"),
+            );
+          },
         },
-        onError: (err: any) => {
-          toast.error("Failed to create hymn: " + (err.message || "Unknown error"));
-        },
-      });
+      );
     } else if (editingHymn) {
       updateHymnMutation.mutate(
-        { id: editingHymn.id, data: payload },
+        { id: editingHymn.id, data: payload, book: activeHymnal },
         {
           onSuccess: (updated: Hymn) => {
-            toast.success("Hymn updated successfully!");
+            toast.success(
+              `${activeHymnal === "yoruba" ? "Yoruba" : "English"} Hymn updated successfully!`,
+            );
             setEditingHymn(null);
             if (previewHymn && previewHymn.id === editingHymn.id) {
               setPreviewHymn(updated);
@@ -194,9 +300,11 @@ export default function HymnsView() {
             refetch();
           },
           onError: (err: any) => {
-            toast.error("Failed to update hymn: " + (err.message || "Unknown error"));
+            toast.error(
+              "Failed to update hymn: " + (err.message || "Unknown error"),
+            );
           },
-        }
+        },
       );
     }
   };
@@ -204,18 +312,23 @@ export default function HymnsView() {
   // Delete Hymn
   const handleConfirmDelete = () => {
     if (!deletingHymn) return;
-    deleteHymnMutation.mutate(deletingHymn.id, {
-      onSuccess: () => {
-        toast.success(`Hymn #${deletingHymn.number} deleted successfully.`);
-        setDeletingHymn(null);
-        if (previewHymn?.id === deletingHymn.id) setPreviewHymn(null);
-        refetch();
+    deleteHymnMutation.mutate(
+      { id: deletingHymn.id, book: activeHymnal },
+      {
+        onSuccess: () => {
+          toast.success(`Hymn #${deletingHymn.number} deleted successfully.`);
+          setDeletingHymn(null);
+          if (previewHymn?.id === deletingHymn.id) setPreviewHymn(null);
+          refetch();
+        },
+        onError: (err: any) => {
+          toast.error(
+            "Failed to delete hymn: " + (err.message || "Unknown error"),
+          );
+          setDeletingHymn(null);
+        },
       },
-      onError: (err: any) => {
-        toast.error("Failed to delete hymn: " + (err.message || "Unknown error"));
-        setDeletingHymn(null);
-      },
-    });
+    );
   };
 
   // File Upload Handlers (identical to Devotions)
@@ -269,24 +382,42 @@ export default function HymnsView() {
       });
     }, 300);
 
-    bulkUploadMutation.mutate(selectedFile, {
-      onSuccess: (data: any) => {
-        clearInterval(progressInterval);
-        setUploadProgress(100);
-        setTimeout(() => {
+    bulkUploadMutation.mutate(
+      {
+        fileOrData: selectedFile,
+        lang: uploadLang,
+        book: uploadLang === "yo" ? "yoruba" : "english",
+      },
+      {
+        onSuccess: (data: any) => {
+          clearInterval(progressInterval);
+          setUploadProgress(100);
+          setTimeout(() => {
+            setIsProcessing(false);
+            setUploadReport(data);
+            const langLabel =
+              uploadLang === "yo"
+                ? "Yoruba hymnal (*Ìwé Orin*)"
+                : "English hymnal";
+            toast.success(
+              `${langLabel} uploaded! Parsed ${data.count || 0} hymns.`,
+            );
+            setSelectedFile(null);
+            if (uploadLang === "yo") {
+              setActiveHymnal("yoruba");
+            }
+            refetch();
+          }, 400);
+        },
+        onError: (err: any) => {
+          clearInterval(progressInterval);
           setIsProcessing(false);
-          setUploadReport(data);
-          toast.success(`Hymnal uploaded! Parsed ${data.count || 0} hymns.`);
-          setSelectedFile(null);
-          refetch();
-        }, 400);
+          toast.error(
+            "Failed to parse hymnal: " + (err.message || "Unknown error"),
+          );
+        },
       },
-      onError: (err: any) => {
-        clearInterval(progressInterval);
-        setIsProcessing(false);
-        toast.error("Failed to parse hymnal: " + (err.message || "Unknown error"));
-      },
-    });
+    );
   };
 
   return (
@@ -295,13 +426,16 @@ export default function HymnsView() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5 w-full">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hymn Library</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              Hymn Library
+            </h1>
             <span className="text-xs bg-orange-100 text-orange-700 font-bold px-2.5 py-0.5 rounded-full">
               {data?.total || hymns.length} Hymns
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            Upload hymnal documents, inspect hymns, and manage church hymnal entries
+            Upload hymnal documents, inspect hymns, and manage church hymnal
+            entries
           </p>
         </div>
 
@@ -330,6 +464,67 @@ export default function HymnsView() {
             <span>Upload Hymn</span>
           </button>
         </div>
+      </div>
+
+      {/* Hymnal Switcher Toggle (English vs Yoruba Separate Books) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveHymnal("english");
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeHymnal === "english"
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            <span className="text-base leading-none">🇬🇧</span>
+            <span>English Hymnal</span>
+            {activeHymnal === "english" && (
+              <span className="ml-1 text-[10px] bg-slate-700 text-slate-200 px-2 py-0.5 rounded-full font-bold">
+                {data?.total ?? hymns.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveHymnal("yoruba");
+              setCurrentPage(1);
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeHymnal === "yoruba"
+                ? "bg-emerald-700 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            <span className="text-base leading-none">🇳🇬</span>
+            <span>Yoruba Hymnal (Ìwé Orin Mímọ́)</span>
+            {activeHymnal === "yoruba" && (
+              <span className="ml-1 text-[10px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded-full font-bold">
+                {data?.total ?? hymns.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <span className="text-xs text-slate-500 font-medium">
+          {activeHymnal === "english" ? (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+              Viewing separate English hymn collection
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+              Viewing separate Yoruba collection (Ìwé Orin Mímọ́)
+            </span>
+          )}
+        </span>
       </div>
 
       {/* ========================================================
@@ -382,8 +577,12 @@ export default function HymnsView() {
             <div className="bg-white border border-slate-100 rounded-2xl p-16 text-center space-y-4 shadow-xs flex flex-col items-center justify-center">
               <Loader2 className="w-10 h-10 text-orange-600 animate-spin" />
               <div className="space-y-1">
-                <h3 className="font-bold text-slate-700 text-base">Loading Hymns...</h3>
-                <p className="text-xs text-slate-400">Fetching hymns from server...</p>
+                <h3 className="font-bold text-slate-700 text-base">
+                  Loading Hymns...
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Fetching hymns from server...
+                </p>
               </div>
             </div>
           ) : filteredHymns.length === 0 ? (
@@ -393,7 +592,9 @@ export default function HymnsView() {
                 <BookOpen className="w-8 h-8" />
               </div>
               <div className="space-y-1">
-                <h3 className="font-bold text-slate-700 text-lg">No Hymns Found</h3>
+                <h3 className="font-bold text-slate-700 text-lg">
+                  No Hymns Found
+                </h3>
                 <p className="text-xs text-slate-400 max-w-sm mx-auto">
                   {searchTerm
                     ? `We couldn't find any hymns matching "${searchTerm}". Try searching by hymn number or another keyword.`
@@ -427,8 +628,8 @@ export default function HymnsView() {
                     versesArr.length > 0 && versesArr[0] !== "null"
                       ? versesArr[0].split("\n")[0]
                       : entry.chorus && entry.chorus !== "null"
-                      ? entry.chorus.split("\n")[0]
-                      : "";
+                        ? entry.chorus.split("\n")[0]
+                        : "";
 
                   return (
                     <div
@@ -457,12 +658,18 @@ export default function HymnsView() {
                           {entry.title || "[No Title]"}
                         </h3>
                         <p className="text-xs font-semibold text-slate-400 italic leading-snug">
-                          {entry.author ? `By ${entry.author}` : "Traditional Hymn"}
+                          {entry.author
+                            ? `By ${entry.author.replace(/Christ Apostolic Church\s*(\(CAC\))?\s*(Worldwide)?/gi, "Ìwé Orin Mímọ́").replace(/\bCAC\b(\s*Worldwide)?/gi, "Ìwé Orin Mímọ́")}`
+                            : activeHymnal === "yoruba"
+                              ? "Ìwé Orin Mímọ́"
+                              : "Traditional Hymn"}
                         </p>
 
                         {/* First verse or chorus snippet */}
                         <p className="text-xxs text-slate-500 line-clamp-2 leading-relaxed">
-                          {firstVersePreview ? `"${firstVersePreview}"` : "[No Verse Text]"}
+                          {firstVersePreview
+                            ? `"${firstVersePreview}"`
+                            : "[No Verse Text]"}
                         </p>
                       </div>
 
@@ -480,7 +687,7 @@ export default function HymnsView() {
                             <span>Edit</span>
                           </button>
                           <button
-                            onClick={() => setPreviewHymn(entry)}
+                            onClick={() => handleOpenPreview(entry)}
                             className="text-xs font-bold text-orange-600 hover:text-orange-750 transition-colors flex items-center gap-0.5 cursor-pointer"
                           >
                             <span>Preview...</span>
@@ -504,11 +711,20 @@ export default function HymnsView() {
               {totalPages > 1 && (
                 <div className="flex justify-between items-center bg-white px-5 py-4 rounded-xl shadow-xs">
                   <span className="text-xs text-slate-500">
-                    Showing <strong className="font-semibold">{startIndex + 1}</strong> -{" "}
+                    Showing{" "}
+                    <strong className="font-semibold">{startIndex + 1}</strong>{" "}
+                    -{" "}
                     <strong className="font-semibold">
-                      {Math.min(startIndex + entriesPerPage, filteredHymns.length)}
+                      {Math.min(
+                        startIndex + entriesPerPage,
+                        filteredHymns.length,
+                      )}
                     </strong>{" "}
-                    of <strong className="font-semibold">{data?.total || filteredHymns.length}</strong> hymns
+                    of{" "}
+                    <strong className="font-semibold">
+                      {data?.total || filteredHymns.length}
+                    </strong>{" "}
+                    hymns
                   </span>
 
                   <div className="flex items-center gap-2">
@@ -529,7 +745,10 @@ export default function HymnsView() {
                       ) {
                         if (pageNum === 2 || pageNum === totalPages - 1) {
                           return (
-                            <span key={pageNum} className="text-slate-300 text-xs">
+                            <span
+                              key={pageNum}
+                              className="text-slate-300 text-xs"
+                            >
                               ...
                             </span>
                           );
@@ -573,13 +792,60 @@ export default function HymnsView() {
           {/* Form Settings / Guidelines */}
           <div className="bg-white rounded-xl p-6 shadow-xs space-y-6 lg:col-span-1">
             <div className="space-y-1">
-              <h3 className="font-bold text-slate-800 text-md">Hymnal Upload Configuration</h3>
+              <h3 className="font-bold text-slate-800 text-md">
+                Hymnal Upload Configuration
+              </h3>
               <p className="text-xs text-slate-400">
-                Upload church hymnal documents to automatically parse and populate hymns
+                Upload church hymnal documents to automatically parse and
+                populate hymns
               </p>
             </div>
 
             <div className="space-y-4">
+              {/* Language Selection */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                  Target Hymnal Language
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUploadLang("en")}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center gap-1 cursor-pointer ${
+                      uploadLang === "en"
+                        ? "bg-orange-50 border-orange-500 text-orange-700 shadow-xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span className="text-base">🇬🇧</span>
+                    <span>English (Default)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUploadLang("yo")}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center gap-1 cursor-pointer ${
+                      uploadLang === "yo"
+                        ? "bg-orange-50 border-orange-500 text-orange-700 shadow-xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span className="text-base">🇳🇬</span>
+                    <span>Yoruba (Ìwé Orin)</span>
+                  </button>
+                </div>
+                {uploadLang === "yo" && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xxs leading-relaxed flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Official Yoruba Hymnal:</strong> Uploaded hymns
+                      will map directly to the official Yoruba hymn collection
+                      by hymn number. The mobile app switches to these exact
+                      lyrics when users select Yoruba.
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-3">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Supported File Types
@@ -587,15 +853,23 @@ export default function HymnsView() {
                 <div className="space-y-2 text-xs text-slate-600">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span><strong>.docx</strong> (Word document with headings & lyrics)</span>
+                    <span>
+                      <strong>.docx</strong> (Word document with headings &
+                      lyrics)
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span><strong>.txt</strong> (Plain text with numbered hymn entries)</span>
+                    <span>
+                      <strong>.txt</strong> (Plain text with numbered hymn
+                      entries)
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span><strong>.json</strong> (Structured hymnal export format)</span>
+                    <span>
+                      <strong>.json</strong> (Structured hymnal export format)
+                    </span>
                   </div>
                 </div>
               </div>
@@ -606,14 +880,20 @@ export default function HymnsView() {
                   <span>Auto-Numbering & Sync</span>
                 </h4>
                 <p className="text-xxs text-orange-950 leading-relaxed">
-                  The parser extracts hymn numbers, titles, tunes, stanzas, and choruses. Uploaded hymns are instantly available to all mobile app users through background sync.
+                  The parser extracts hymn numbers, titles, tunes, stanzas, and
+                  choruses. Uploaded hymns are instantly available to all mobile
+                  app users through background sync.
                 </p>
               </div>
 
               {/* Quick stats */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/70 flex justify-between items-center">
-                <span className="text-xs text-slate-500 font-medium">Current Active Hymns:</span>
-                <span className="text-sm font-bold text-slate-800 font-mono">{hymns.length}</span>
+                <span className="text-xs text-slate-500 font-medium">
+                  Current Active Hymns:
+                </span>
+                <span className="text-sm font-bold text-slate-800 font-mono">
+                  {hymns.length}
+                </span>
               </div>
             </div>
           </div>
@@ -632,7 +912,9 @@ export default function HymnsView() {
                       <UploadCloud className="w-10 h-10 animate-bounce" />
                     </div>
                     <div className="space-y-2">
-                      <h3 className="font-extrabold text-slate-800 text-lg">Selected File</h3>
+                      <h3 className="font-extrabold text-slate-800 text-lg">
+                        Selected File
+                      </h3>
                       <p className="font-mono text-sm font-semibold text-slate-700 break-all">
                         {selectedFile.name}
                       </p>
@@ -670,7 +952,8 @@ export default function HymnsView() {
                         Upload Hymnal Document
                       </h3>
                       <p className="text-xs text-slate-400">
-                        Drag and drop your hymnal document here, or click to choose from directory
+                        Drag and drop your hymnal document here, or click to
+                        choose from directory
                       </p>
                     </div>
 
@@ -780,18 +1063,33 @@ export default function HymnsView() {
       )}
 
       {/* ========================================================
-          MODAL 1: HYMN ENTRY PREVIEW MODAL (Exact Devotions Styling)
+          MODAL 1: HYMN ENTRY PREVIEW MODAL
           ======================================================== */}
       {previewHymn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <div className="bg-white border border-slate-100 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden font-sans">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
-              <div className="space-y-0.5">
-                <span className="bg-orange-600 text-white text-xxs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                  Hymn #{previewHymn.number}
-                </span>
-                <h3 className="font-extrabold text-md mt-1 leading-snug">{previewHymn.title}</h3>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="bg-orange-600 text-white text-xxs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                    Hymn #{previewHymn.number}
+                  </span>
+                  <span
+                    className={`text-xxs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                      activeHymnal === "yoruba"
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                        : "bg-blue-500/20 text-blue-300 border border-blue-500/40"
+                    }`}
+                  >
+                    {activeHymnal === "yoruba"
+                      ? "🇳🇬 Ìwé Orin Mímọ́ (Yoruba)"
+                      : "🇬🇧 English Hymnal"}
+                  </span>
+                </div>
+                <h3 className="font-extrabold text-md mt-1 leading-snug">
+                  {previewHymn.title}
+                </h3>
               </div>
               <button
                 onClick={() => setPreviewHymn(null)}
@@ -803,60 +1101,101 @@ export default function HymnsView() {
 
             {/* Scrollable Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-slate-700 leading-relaxed text-sm">
-              {/* Hymn Info Header Bar */}
-              <div className="bg-orange-50/50 border-l-4 border-orange-500 p-4 rounded-r-xl flex flex-wrap items-center justify-between gap-2">
+              <div
+                className={`p-4 rounded-r-xl border-l-4 flex flex-wrap items-center justify-between gap-2 ${
+                  activeHymnal === "yoruba"
+                    ? "bg-emerald-50/60 border-emerald-500"
+                    : "bg-orange-50/50 border-orange-500"
+                }`}
+              >
                 <div>
-                  <div className="font-bold text-xs text-orange-600 uppercase tracking-wider mb-1">
-                    {previewHymn.author ? `Author: ${previewHymn.author}` : "Traditional Hymn"}
+                  <div
+                    className={`font-bold text-xs uppercase tracking-wider mb-1 ${
+                      activeHymnal === "yoruba"
+                        ? "text-emerald-700"
+                        : "text-orange-600"
+                    }`}
+                  >
+                    {(() => {
+                      const rawAuthor =
+                        previewHymn.author ||
+                        (activeHymnal === "yoruba"
+                          ? "Ìwé Orin Mímọ́"
+                          : "Traditional Hymn");
+                      const cleanAuthor = rawAuthor
+                        .replace(
+                          /Christ Apostolic Church\s*(\(CAC\))?\s*(Worldwide)?/gi,
+                          "Ìwé Orin Mímọ́",
+                        )
+                        .replace(/\bCAC\b(\s*Worldwide)?/gi, "Ìwé Orin Mímọ́");
+                      return `Author: ${cleanAuthor}`;
+                    })()}
                   </div>
                   {previewHymn.key && (
                     <div className="text-slate-800 font-semibold text-xs">
                       Key: {formatKey(previewHymn.key)}
                     </div>
                   )}
+                  {previewHymn.category && (
+                    <div className="text-slate-500 text-xs mt-0.5">
+                      Category:{" "}
+                      {previewHymn.category
+                        .replace(/\bCAC\b/gi, "Mímọ́")
+                        .replace(/Christ Apostolic Church/gi, "Orin Mímọ́")}
+                    </div>
+                  )}
                 </div>
-                <div className="text-xxs font-mono text-slate-400 font-bold uppercase">
-                  {getVersesArray(previewHymn.verses).length} Stanzas
+                <div className="text-xxs font-mono text-slate-500 font-bold uppercase">
+                  {getVersesArray(previewHymn.verses).length}{" "}
+                  {activeHymnal === "yoruba" ? "Ẹsẹ (Stanzas)" : "Stanzas"}
                 </div>
               </div>
 
-              {/* Verses & Stanzas */}
               <div className="space-y-5">
-                {getVersesArray(previewHymn.verses).map((verse: string, index: number) => (
-                  <div key={index} className="space-y-2">
-                    <div className="flex items-start gap-3">
-                      <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center font-mono shrink-0">
-                        {index + 1}
-                      </span>
-                      <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed flex-1">
-                        {verse}
-                      </p>
-                    </div>
-
-                    {/* Chorus after 1st verse */}
-                    {index === 0 && previewHymn.chorus && (
-                      <div className="bg-slate-50 border-l-4 border-orange-400 p-4 rounded-r-xl ml-9 my-3">
-                        <h4 className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-1.5">
-                          Chorus / Refrain
-                        </h4>
-                        <p className="text-slate-700 italic whitespace-pre-line text-sm leading-relaxed">
-                          {previewHymn.chorus}
+                {getVersesArray(previewHymn.verses).map(
+                  (verse: string, index: number) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center font-mono shrink-0 ${
+                            activeHymnal === "yoruba"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                        <p className="text-slate-800 whitespace-pre-line text-sm leading-relaxed flex-1 font-medium">
+                          {verse}
                         </p>
                       </div>
-                    )}
-                  </div>
-                ))}
 
-                {/* If there was a chorus but verses were empty */}
-                {getVersesArray(previewHymn.verses).length === 0 && previewHymn.chorus && (
-                  <div className="bg-slate-50 border-l-4 border-orange-400 p-4 rounded-r-xl">
-                    <h4 className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-1.5">
-                      Chorus / Refrain
-                    </h4>
-                    <p className="text-slate-700 italic whitespace-pre-line text-sm leading-relaxed">
-                      {previewHymn.chorus}
-                    </p>
-                  </div>
+                      {index === 0 && previewHymn.chorus && (
+                        <div
+                          className={`border-l-4 p-4 rounded-r-xl ml-9 my-3 ${
+                            activeHymnal === "yoruba"
+                              ? "bg-emerald-50/70 border-emerald-400"
+                              : "bg-slate-50 border-orange-400"
+                          }`}
+                        >
+                          <h4
+                            className={`text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                              activeHymnal === "yoruba"
+                                ? "text-emerald-700"
+                                : "text-orange-600"
+                            }`}
+                          >
+                            {activeHymnal === "yoruba"
+                              ? "Ègbè (Chorus)"
+                              : "Chorus / Refrain"}
+                          </h4>
+                          <p className="text-slate-800 italic whitespace-pre-line text-sm leading-relaxed font-medium">
+                            {previewHymn.chorus}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ),
                 )}
               </div>
             </div>
@@ -871,7 +1210,7 @@ export default function HymnsView() {
                 }}
                 className="px-5 py-2 border border-slate-200 text-slate-700 font-semibold text-xs tracking-wide rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                Edit
+                Edit Lyrics
               </button>
               <button
                 onClick={() => setPreviewHymn(null)}
@@ -885,7 +1224,7 @@ export default function HymnsView() {
       )}
 
       {/* ========================================================
-          MODAL 2: EDIT / CREATE HYMN MODAL
+          MODAL 2: EDIT / CREATE HYMN MODAL (Bilingual: EN / YO)
           ======================================================== */}
       {(editingHymn || isCreatingHymn) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
@@ -894,10 +1233,19 @@ export default function HymnsView() {
             <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
               <div className="space-y-0.5">
                 <span className="bg-orange-600 text-white text-xxs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  {isCreatingHymn ? "Add New Hymn" : `Edit Hymn #${formNumber}`}
+                  {isCreatingHymn
+                    ? activeHymnal === "yoruba"
+                      ? "Add New Yorùbá Hymn"
+                      : "Add New Hymn"
+                    : activeHymnal === "yoruba"
+                      ? `Edit Yorùbá Hymn #${formNumber}`
+                      : `Edit Hymn #${formNumber}`}
                 </span>
                 <h3 className="font-extrabold text-md mt-1 leading-snug">
-                  {formTitle || (isCreatingHymn ? "Untitled Hymn" : "Edit Hymn")}
+                  {modalLangTab === "yo" && yoTitle
+                    ? yoTitle
+                    : formTitle ||
+                      (isCreatingHymn ? "Untitled Hymn" : "Edit Hymn")}
                 </h3>
               </div>
               <button
@@ -911,87 +1259,186 @@ export default function HymnsView() {
               </button>
             </div>
 
+            {/* Sub-tabs for Language (English vs Yoruba overlay on English hymnal only) */}
+            {!isCreatingHymn && activeHymnal === "english" && (
+              <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2.5 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModalLangTab("en")}
+                  className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                    modalLangTab === "en"
+                      ? "border-orange-600 text-orange-700 bg-white rounded-t-lg border-t border-x border-slate-200"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <span>🇬🇧</span>
+                  <span>English Lyrics</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalLangTab("yo")}
+                  className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                    modalLangTab === "yo"
+                      ? "border-orange-600 text-orange-700 bg-white rounded-t-lg border-t border-x border-slate-200"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <span>🇳🇬</span>
+                  <span>Yoruba Translation Overlay</span>
+                </button>
+              </div>
+            )}
+
             {/* Scrollable Form */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin text-slate-700">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                    Hymn Number *
-                  </label>
-                  <input
-                    type="number"
-                    value={formNumber}
-                    onChange={(e) => setFormNumber(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:border-orange-500"
-                  />
-                </div>
+              {modalLangTab === "yo" ? (
+                /* Yoruba Lyrics Form */
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 flex gap-2 text-emerald-800 text-xs leading-normal">
+                    <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Authentic Church Hymnal:</strong> Enter the
+                      official Yoruba hymn lyrics (*Ìwé Orin Mímọ́*). When users
+                      switch the mobile app to Yoruba, these verified lyrics
+                      will be displayed.
+                    </span>
+                  </div>
 
-                <div className="sm:col-span-2 space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                    Hymn Title *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Great Is Thy Faithfulness"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:border-orange-500"
-                  />
-                </div>
-              </div>
+                  {isLoadingYo ? (
+                    <div className="py-10 flex flex-col items-center justify-center gap-2 text-slate-400">
+                      <Loader2 className="w-6 h-6 animate-spin text-orange-600" />
+                      <span className="text-xs">
+                        Loading existing Yoruba lyrics...
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                          Yoruba Hymn Title (*Àkọ́lé*) *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Mímọ́, Mímọ́, Mímọ́! Olódùmarè Olúwa"
+                          value={yoTitle}
+                          onChange={(e) => setYoTitle(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                    Author / Composer
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Thomas O. Chisholm"
-                    value={formAuthor}
-                    onChange={(e) => setFormAuthor(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-orange-500"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                    Key / Tune
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. D Major / FAITHFULNESS"
-                    value={formKey}
-                    onChange={(e) => setFormKey(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-orange-500"
-                  />
-                </div>
-              </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                          Yoruba Chorus (*Ègbè*) (Optional)
+                        </label>
+                        <textarea
+                          rows={3}
+                          placeholder="Tẹ ègbè orin mímọ́ síbí..."
+                          value={yoChorus}
+                          onChange={(e) => setYoChorus(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                  Chorus / Refrain (Optional)
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Enter chorus or refrain lyrics..."
-                  value={formChorus}
-                  onChange={(e) => setFormChorus(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-orange-500"
-                />
-              </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                          Yoruba Stanzas (*Àwọn Ẹsẹ Orin*) (Separate with ---)
+                        </label>
+                        <textarea
+                          rows={8}
+                          placeholder="Ẹsẹ kìn-ín-ní...&#10;&#10;---&#10;&#10;Ẹsẹ kejì..."
+                          value={yoVersesText}
+                          onChange={(e) => setYoVersesText(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 font-mono focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                /* English Lyrics Form */
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                        Hymn Number *
+                      </label>
+                      <input
+                        type="number"
+                        value={formNumber}
+                        onChange={(e) => setFormNumber(Number(e.target.value))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                  Stanzas / Verses (Separate stanzas with --- or triple newlines)
-                </label>
-                <textarea
-                  rows={8}
-                  placeholder="Great is Thy faithfulness, O God my Father...&#10;&#10;---&#10;&#10;Summer and winter, and springtime and harvest..."
-                  value={formVersesText}
-                  onChange={(e) => setFormVersesText(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 font-mono focus:outline-none focus:border-orange-500"
-                />
-              </div>
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                        Hymn Title *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Great Is Thy Faithfulness"
+                        value={formTitle}
+                        onChange={(e) => setFormTitle(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                        Author / Composer
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Thomas O. Chisholm"
+                        value={formAuthor}
+                        onChange={(e) => setFormAuthor(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                        Key / Tune
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. D Major / FAITHFULNESS"
+                        value={formKey}
+                        onChange={(e) => setFormKey(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                      Chorus / Refrain (Optional)
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Enter chorus or refrain lyrics..."
+                      value={formChorus}
+                      onChange={(e) => setFormChorus(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                      Stanzas / Verses (Separate stanzas with --- or triple
+                      newlines)
+                    </label>
+                    <textarea
+                      rows={8}
+                      placeholder="Great is Thy faithfulness, O God my Father...&#10;&#10;---&#10;&#10;Summer and winter, and springtime and harvest..."
+                      value={formVersesText}
+                      onChange={(e) => setFormVersesText(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 font-mono focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Footer */}
@@ -1005,16 +1452,34 @@ export default function HymnsView() {
               >
                 Cancel
               </button>
-              <button
-                onClick={handleSaveForm}
-                disabled={createHymnMutation.isPending || updateHymnMutation.isPending}
-                className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {(createHymnMutation.isPending || updateHymnMutation.isPending) && (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                )}
-                <span>{isCreatingHymn ? "Create Hymn" : "Save Changes"}</span>
-              </button>
+
+              {modalLangTab === "yo" ? (
+                <button
+                  type="button"
+                  onClick={handleSaveYoruba}
+                  disabled={isSavingYo}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shadow-md shadow-emerald-600/10"
+                >
+                  {isSavingYo && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  )}
+                  <span>Save Yoruba Lyrics</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleSaveForm}
+                  disabled={
+                    createHymnMutation.isPending || updateHymnMutation.isPending
+                  }
+                  className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs tracking-wide rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {(createHymnMutation.isPending ||
+                    updateHymnMutation.isPending) && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  )}
+                  <span>{isCreatingHymn ? "Create Hymn" : "Save Changes"}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1031,13 +1496,16 @@ export default function HymnsView() {
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 text-base">Delete Hymn #{deletingHymn.number}?</h3>
+                <h3 className="font-bold text-slate-800 text-base">
+                  Delete Hymn #{deletingHymn.number}?
+                </h3>
                 <p className="text-xs text-slate-400">"{deletingHymn.title}"</p>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Are you sure you want to permanently remove this hymn from the hymnal library? This action cannot be undone.
+              Are you sure you want to permanently remove this hymn from the
+              hymnal library? This action cannot be undone.
             </p>
 
             <div className="flex justify-end gap-3 pt-2">
@@ -1052,7 +1520,9 @@ export default function HymnsView() {
                 disabled={deleteHymnMutation.isPending}
                 className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
-                {deleteHymnMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {deleteHymnMutation.isPending && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                )}
                 <span>Delete Hymn</span>
               </button>
             </div>

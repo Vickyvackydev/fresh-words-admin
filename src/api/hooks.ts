@@ -146,17 +146,17 @@ export function useUpdateDevotional() {
 }
 
 // Hymn hooks
-export function useHymnsList(page = 1, limit = 1000, q = "", category = "") {
+export function useHymnsList(page = 1, limit = 1000, q = "", category = "", book = "english") {
   return useQuery({
-    queryKey: ["admin", "hymns", page, limit, q, category],
-    queryFn: () => adminService.getHymns(page, limit, q, category),
+    queryKey: ["admin", "hymns", page, limit, q, category, book],
+    queryFn: () => adminService.getHymns(page, limit, q, category, book),
   });
 }
 
 export function useCreateHymn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => adminService.createHymn(data),
+    mutationFn: ({ data, book = "english" }: { data: any; book?: string }) => adminService.createHymn(data, book),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
     },
@@ -166,7 +166,7 @@ export function useCreateHymn() {
 export function useUpdateHymn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => adminService.updateHymn(id, data),
+    mutationFn: ({ id, data, book = "english" }: { id: string; data: any; book?: string }) => adminService.updateHymn(id, data, book),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
     },
@@ -176,7 +176,7 @@ export function useUpdateHymn() {
 export function useDeleteHymn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => adminService.deleteHymn(id),
+    mutationFn: ({ id, book = "english" }: { id: string; book?: string }) => adminService.deleteHymn(id, book),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
     },
@@ -186,10 +186,58 @@ export function useDeleteHymn() {
 export function useBulkUploadHymns() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (fileOrData: File | any[]) => adminService.bulkUploadHymns(fileOrData),
+    mutationFn: ({ fileOrData, lang = "en", book = "english" }: { fileOrData: File | any[]; lang?: string; book?: string }) =>
+      adminService.bulkUploadHymns(fileOrData, lang, book),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
     },
   });
 }
+
+export function useHymnTranslation(id: string, lang = "yo") {
+  return useQuery({
+    queryKey: ["admin", "hymns", id, "translation", lang],
+    queryFn: () => adminService.getHymnTranslation(id, lang),
+    enabled: !!id,
+  });
+}
+
+export function useSaveHymnTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      adminService.saveHymnTranslation(id, data),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "hymns", vars.id, "translation"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "hymns"] });
+    },
+  });
+}
+
+export function useDevotionalTranslation(id: string, lang = "yo") {
+  return useQuery({
+    queryKey: ["admin", "devotionals", id, "translation", lang],
+    queryFn: () => adminService.getDevotionalTranslation(id, lang),
+    enabled: !!id,
+  });
+}
+
+export function useSaveDevotionalTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      adminService.saveDevotionalTranslation(id, data),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "devotionals", vars.id, "translation"] });
+    },
+  });
+}
+
+export function useGenerateDevotionalAIDraft() {
+  return useMutation({
+    mutationFn: ({ id, lang = "yo" }: { id: string; lang?: string }) =>
+      adminService.generateDevotionalAIDraft(id, lang),
+  });
+}
+
 

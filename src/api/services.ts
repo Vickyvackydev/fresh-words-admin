@@ -250,42 +250,106 @@ export const adminService = {
     page = 1,
     limit = 1000,
     q = "",
-    category = ""
+    category = "",
+    book = "english"
   ): Promise<HymnsPaginated> => {
     const response = await api.get("/admin/hymns", {
-      params: { page, limit, q, category },
+      params: { page, limit, q, category, book },
     });
     return response.data.data;
   },
 
-  createHymn: async (data: Partial<Hymn>): Promise<Hymn> => {
-    const response = await api.post("/admin/hymns", data);
+  createHymn: async (data: Partial<Hymn>, book = "english"): Promise<Hymn> => {
+    const response = await api.post(`/admin/hymns?book=${book}`, data);
     return response.data.data;
   },
 
-  updateHymn: async (id: string, data: Partial<Hymn>): Promise<Hymn> => {
-    const response = await api.put(`/admin/hymns/${id}`, data);
+  updateHymn: async (id: string, data: Partial<Hymn>, book = "english"): Promise<Hymn> => {
+    const response = await api.put(`/admin/hymns/${id}?book=${book}`, data);
     return response.data.data;
   },
 
-  deleteHymn: async (id: string): Promise<any> => {
-    const response = await api.delete(`/admin/hymns/${id}`);
+  deleteHymn: async (id: string, book = "english"): Promise<any> => {
+    const response = await api.delete(`/admin/hymns/${id}?book=${book}`);
     return response.data.data;
   },
 
-  bulkUploadHymns: async (fileOrData: File | any[]): Promise<any> => {
+  bulkUploadHymns: async (fileOrData: File | any[], lang: string = "en", book: string = "english"): Promise<any> => {
+    const targetBook = lang === "yo" || book === "yoruba" ? "yoruba" : "english";
     if (fileOrData instanceof File) {
       const formData = new FormData();
       formData.append("file", fileOrData);
-      const response = await api.post("/admin/hymns/bulk", formData, {
+      formData.append("lang", lang);
+      formData.append("book", targetBook);
+      const response = await api.post(`/admin/hymns/bulk?lang=${lang}&book=${targetBook}`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
       return response.data.data;
     } else {
-      const response = await api.post("/admin/hymns/bulk", fileOrData);
+      const response = await api.post(`/admin/hymns/bulk?lang=${lang}&book=${targetBook}`, fileOrData);
       return response.data.data;
     }
+  },
+
+  getHymnTranslation: async (id: string, lang = "yo"): Promise<{
+    content_id: string;
+    language: string;
+    title: string;
+    chorus: string;
+    verses: string[];
+  }> => {
+    const response = await api.get(`/admin/hymns/${id}/translation?lang=${lang}`);
+    return response.data.data;
+  },
+
+  saveHymnTranslation: async (id: string, data: {
+    language?: string;
+    title: string;
+    chorus: string;
+    verses: string[];
+  }): Promise<any> => {
+    const response = await api.put(`/admin/hymns/${id}/translation?lang=${data.language || "yo"}`, data);
+    return response.data.data;
+  },
+
+  getDevotionalTranslation: async (id: string, lang = "yo"): Promise<{
+    content_id: string;
+    language: string;
+    title: string;
+    scripture_quote: string;
+    scripture_reference: string;
+    body: string;
+    prayer: string;
+    reflection: string;
+  }> => {
+    const response = await api.get(`/admin/devotionals/${id}/translation?lang=${lang}`);
+    return response.data.data;
+  },
+
+  saveDevotionalTranslation: async (id: string, data: {
+    language?: string;
+    title: string;
+    scripture_quote: string;
+    scripture_reference: string;
+    body: string;
+    prayer: string;
+    reflection: string;
+  }): Promise<any> => {
+    const response = await api.put(`/admin/devotionals/${id}/translation?lang=${data.language || "yo"}`, data);
+    return response.data.data;
+  },
+
+  generateDevotionalAIDraft: async (id: string, lang = "yo"): Promise<{
+    title: string;
+    scripture_quote: string;
+    scripture_reference: string;
+    body: string;
+    prayer: string;
+    reflection: string;
+  }> => {
+    const response = await api.post(`/admin/devotionals/${id}/translation/ai-draft?lang=${lang}`);
+    return response.data.data;
   },
 };
